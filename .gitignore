@@ -1,0 +1,27 @@
+# Секреты
+.env.local
+.env.secrets
+*.secrets
+
+# Коммитится: .env (общие настройки, не содержит ключей)
+
+# Скомпилированные бинарники
+ai-chat
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+/vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

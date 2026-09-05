@@ -1,0 +1,132 @@
+# Чат с внешним API
+
+Простое клиент-серверное приложение на Go с веб-интерфейсом на HTML/CSS/JavaScript.
+
+## Возможности
+
+- Веб-страница с текстовым полем для ввода сообщений.
+- Введённое сообщение отображается сверху, ответ от внешнего API — снизу.
+- Поддержка авторизации: `Authorization: Bearer`, `X-API-Key`, `Api-Key`.
+- Два формата внешнего API:
+  - **generic** — отправляет `{"message": "..."}`;
+  - **openai** — отправляет запрос в формате `/v1/chat/completions`.
+- Настройка промптов: `SYSTEM_PROMPT`, `ASSISTANT_PROMPT`, `USER_PROMPT_TEMPLATE`.
+
+## Хранение настроек
+
+Настройки разделены на два файла:
+
+- `.env.secrets` — чувствительные данные: `EXTERNAL_API_URL` и `API_KEY`. **Не коммитится**.
+- `.env` — общие настройки: промпты, формат API, тип авторизации, порт. **Коммитится**.
+
+При первом клонировании репозитория создайте `.env.secrets` из примера:
+
+```bash
+cp .env.secrets.example .env.secrets
+```
+
+Заполните `.env.secrets` своим URL и ключом.
+
+## Запуск
+
+### Через скрипт (рекомендуется)
+
+```bash
+./run.sh
+```
+
+Скрипт последовательно загружает `.env.secrets`, затем `.env`, и запускает сервер.
+
+### Вручную
+
+```bash
+set -a
+source .env.secrets
+source .env
+set +a
+go run main.go
+```
+
+### Скомпилированный бинарник
+
+```bash
+go build -o ai-chat .
+set -a
+source .env.secrets
+source .env
+set +a
+./ai-chat
+```
+
+После запуска откройте: http://localhost:8080
+
+## Настройка через переменные окружения
+
+### `.env.secrets`
+
+| Переменная         | Описание                              | По умолчанию |
+|--------------------|---------------------------------------|--------------|
+| `EXTERNAL_API_URL` | URL внешнего API                      | —            |
+| `API_KEY`          | Ключ авторизации                      | —            |
+
+### `.env`
+
+| Переменная            | Описание                                                                                             | По умолчанию                  |
+|-----------------------|------------------------------------------------------------------------------------------------------|-------------------------------|
+| `AUTH_TYPE`           | Тип авторизации: `bearer`, `x-api-key`, `api-key`, `none`                                            | `bearer`, если задан `API_KEY` |
+| `API_FORMAT`          | Формат API: `generic` или `openai`                                                                   | `openai`, если задан `API_KEY` |
+| `SYSTEM_PROMPT`       | Системный промпт, задающий поведение ассистента                                                      | —                             |
+| `ASSISTANT_PROMPT`    | Начальный текст ответа ассистента (prefix)                                                           | —                             |
+| `USER_PROMPT_TEMPLATE`| Шаблон для обёртки сообщения пользователя. Используйте `{message}` для подстановки                     | —                             |
+| `PORT`                | Порт HTTP-сервера                                                                                    | `8080`                        |
+
+## Примеры запуска без .env
+
+### OpenAI-совместимый API
+
+```bash
+EXTERNAL_API_URL=https://api.ai.localcorp.net/v1/chat/completions \
+API_KEY=sk-... \
+AUTH_TYPE=bearer \
+API_FORMAT=openai \
+go run main.go
+```
+
+### Системный промпт и шаблон пользователя
+
+```bash
+EXTERNAL_API_URL=https://api.ai.localcorp.net/v1/chat/completions \
+API_KEY=sk-... \
+API_FORMAT=openai \
+SYSTEM_PROMPT="Ты эксперт по Go. Отвечай кратко." \
+USER_PROMPT_TEMPLATE="Вопрос про Go: {message}\nКраткий ответ:" \
+go run main.go
+```
+
+### Простое внешнее API без авторизации
+
+```bash
+EXTERNAL_API_URL=https://httpbin.org/anything \
+AUTH_TYPE=none \
+API_FORMAT=generic \
+go run main.go
+```
+
+## Проверка
+
+```bash
+curl -s -X POST http://localhost:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Привет"}'
+```
+
+## Структура
+
+- `main.go` — HTTP-сервер, авторизация, вызов и парсинг внешнего API.
+- `static/index.html` — веб-интерфейс чата.
+- `.env.secrets` — чувствительные данные (не коммитится).
+- `.env.secrets.example` — пример секретов (можно коммитить).
+- `.env` — общие настройки (коммитится).
+- `.env.example` — пример общих настроек (можно коммитить).
+- `run.sh` — скрипт запуска с загрузкой обоих `.env`-файлов.
+- `.gitignore` — исключает `.env`, `.env.secrets` и бинарники из репозитория.
