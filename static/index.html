@@ -14,7 +14,49 @@
             background-color: #f5f5f5;
             height: 100vh;
             display: flex;
+        }
+        #sidebar {
+            width: 280px;
+            background-color: #fff;
+            border-right: 1px solid #e0e0e0;
+            padding: 24px;
+            display: flex;
             flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+        #sidebar h2 {
+            margin: 0 0 8px;
+            font-size: 16px;
+            color: #2c3e50;
+        }
+        .tool-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .tool-group label {
+            font-size: 13px;
+            color: #555;
+            font-weight: 500;
+        }
+        .tool-group select,
+        .tool-group input {
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+        }
+        .tool-group select:focus,
+        .tool-group input:focus {
+            border-color: #007bff;
+        }
+        #main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
         }
         header {
             background-color: #2c3e50;
@@ -70,6 +112,15 @@
             color: #888;
             margin: 0 4px;
         }
+        .finish-reason {
+            font-size: 11px;
+            color: #666;
+            background-color: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 12px;
+            margin: 4px 4px 0;
+            font-family: monospace;
+        }
         #input-area {
             background-color: #fff;
             border-top: 1px solid #e0e0e0;
@@ -114,20 +165,47 @@
     </style>
 </head>
 <body>
-    <header>Чат с внешним API</header>
-    <div id="chat">
-        <div class="empty-state">Введите сообщение, чтобы начать диалог</div>
+    <aside id="sidebar">
+        <h2>Настройки</h2>
+
+        <div class="tool-group">
+            <label for="response-format">Формат ответа</label>
+            <select id="response-format">
+                <option value="text">text</option>
+                <option value="json">json</option>
+            </select>
+        </div>
+
+        <div class="tool-group">
+            <label for="max-tokens">Ограничение по длине ответа</label>
+            <input type="number" id="max-tokens" placeholder="Например, 500" min="1">
+        </div>
+
+        <div class="tool-group">
+            <label for="stop-sequence">Условие завершения ответа</label>
+            <input type="text" id="stop-sequence" placeholder="Стоп-последовательность">
+        </div>
+    </aside>
+
+    <div id="main">
+        <header>Чат с внешним API</header>
+        <div id="chat">
+            <div class="empty-state">Введите сообщение, чтобы начать диалог</div>
+        </div>
+        <form id="input-area">
+            <input type="text" id="message-input" placeholder="Введите сообщение..." autocomplete="off" autofocus>
+            <button type="submit" id="send-button">Отправить</button>
+        </form>
     </div>
-    <form id="input-area">
-        <input type="text" id="message-input" placeholder="Введите сообщение..." autocomplete="off" autofocus>
-        <button type="submit" id="send-button">Отправить</button>
-    </form>
 
     <script>
         const chat = document.getElementById('chat');
         const form = document.getElementById('input-area');
         const input = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
+        const responseFormat = document.getElementById('response-format');
+        const maxTokens = document.getElementById('max-tokens');
+        const stopSequence = document.getElementById('stop-sequence');
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -147,11 +225,18 @@
             removeEmptyState();
             scrollToBottom();
 
+            const payload = {
+                message: message,
+                response_format: responseFormat.value,
+                max_tokens: parseInt(maxTokens.value, 10) || null,
+                stop_sequence: stopSequence.value.trim() || null
+            };
+
             try {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message })
+                    body: JSON.stringify(payload)
                 });
 
                 const data = await response.json();
@@ -160,7 +245,7 @@
                     const errorMessage = createMessage(data.error || 'Неизвестная ошибка', 'error-message');
                     exchange.appendChild(errorMessage);
                 } else {
-                    const apiMessage = createMessage(data.response || '(пустой ответ)', 'api-message');
+                    const apiMessage = createMessage(data.response || '(пустой ответ)', 'api-message', data.finish_reason);
                     exchange.appendChild(apiMessage);
                 }
             } catch (err) {
@@ -172,7 +257,7 @@
             }
         });
 
-        function createMessage(text, className) {
+        function createMessage(text, className, finishReason = null) {
             const wrapper = document.createElement('div');
             wrapper.style.display = 'flex';
             wrapper.style.flexDirection = 'column';
@@ -188,6 +273,14 @@
 
             wrapper.appendChild(meta);
             wrapper.appendChild(bubble);
+
+            if (finishReason) {
+                const reasonLabel = document.createElement('div');
+                reasonLabel.className = 'finish-reason';
+                reasonLabel.textContent = 'finish_reason: ' + finishReason;
+                wrapper.appendChild(reasonLabel);
+            }
+
             return wrapper;
         }
 
