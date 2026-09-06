@@ -42,15 +42,22 @@ type chatRequest struct {
 }
 
 type chatResponse struct {
-	User         string `json:"user"`
-	Response     string `json:"response"`
-	FinishReason string `json:"finish_reason,omitempty"`
-	Error        string `json:"error,omitempty"`
+	User             string `json:"user"`
+	Response         string `json:"response"`
+	FinishReason     string `json:"finish_reason,omitempty"`
+	DurationMs       int64  `json:"duration_ms,omitempty"`
+	PromptTokens     int    `json:"prompt_tokens,omitempty"`
+	CompletionTokens int    `json:"completion_tokens,omitempty"`
+	TotalTokens      int    `json:"total_tokens,omitempty"`
+	Error            string `json:"error,omitempty"`
 }
 
 type extractionResult struct {
-	Content      string
-	FinishReason string
+	Content          string
+	FinishReason     string
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
 }
 
 func loadConfig() config {
@@ -213,6 +220,8 @@ func handleChat(cfg config) http.HandlerFunc {
 			return
 		}
 
+		apiDuration := time.Since(apiStart)
+
 		if externalResp.StatusCode < 200 || externalResp.StatusCode >= 300 {
 			log.Printf("Внешний API вернул статус %d: %s", externalResp.StatusCode, truncate(string(respBody), 200))
 			writeError(w, http.StatusBadGateway, fmt.Sprintf("Внешний API вернул статус %d: %s", externalResp.StatusCode, string(respBody)))
@@ -220,17 +229,22 @@ func handleChat(cfg config) http.HandlerFunc {
 		}
 
 		result := extractResponse(cfg.APIFormat, req.ResponseFormat, respBody)
-		log.Printf("Ответ внешнего API: status=%d, duration=%s, finish_reason=%q, content_length=%d",
+		log.Printf("Ответ внешнего API: status=%d, duration=%s, finish_reason=%q, content_length=%d, tokens=%d",
 			externalResp.StatusCode,
-			time.Since(apiStart),
+			apiDuration,
 			result.FinishReason,
 			len(result.Content),
+			result.TotalTokens,
 		)
 
 		resp := chatResponse{
-			User:         req.Message,
-			Response:     result.Content,
-			FinishReason: result.FinishReason,
+			User:             req.Message,
+			Response:         result.Content,
+			FinishReason:     result.FinishReason,
+			DurationMs:       apiDuration.Milliseconds(),
+			PromptTokens:     result.PromptTokens,
+			CompletionTokens: result.CompletionTokens,
+			TotalTokens:      result.TotalTokens,
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -355,6 +369,11 @@ func extractOpenAIResponse(responseFormat string, body []byte) extractionResult 
 			} `json:"message"`
 			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
+		Usage *struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
 		Error *struct {
 			Message string `json:"message"`
 		} `json:"error"`
@@ -368,15 +387,21 @@ func extractOpenAIResponse(responseFormat string, body []byte) extractionResult 
 		return extractionResult{Content: "Ошибка API: " + data.Error.Message}
 	}
 
+	result := extractionResult{}
+	if data.Usage != nil {
+		result.PromptTokens = data.Usage.PromptTokens
+		result.CompletionTokens = data.Usage.CompletionTokens
+		result.TotalTokens = data.Usage.TotalTokens
+	}
+
 	if len(data.Choices) > 0 {
 		content := data.Choices[0].Message.Content
 		if responseFormat == "json" {
 			content = prettyPrintJSON(content)
 		}
-		return extractionResult{
-			Content:      content,
-			FinishReason: data.Choices[0].FinishReason,
-		}
+		result.Content = content
+		result.FinishReason = data.Choices[0].FinishReason
+		return result
 	}
 
 	return extractionResult{Content: string(body)}

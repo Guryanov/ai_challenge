@@ -112,7 +112,7 @@
             color: #888;
             margin: 0 4px;
         }
-        .finish-reason {
+        .message-info {
             font-size: 11px;
             color: #666;
             background-color: #f0f0f0;
@@ -252,7 +252,12 @@
                     const errorMessage = createMessage(data.error || 'Неизвестная ошибка', 'error-message');
                     exchange.appendChild(errorMessage);
                 } else {
-                    const apiMessage = createMessage(data.response || '(пустой ответ)', 'api-message', data.finish_reason);
+                    const apiMessage = createMessage(data.response || '(пустой ответ)', 'api-message', data.finish_reason, {
+                        durationMs: data.duration_ms,
+                        promptTokens: data.prompt_tokens,
+                        completionTokens: data.completion_tokens,
+                        totalTokens: data.total_tokens
+                    });
                     exchange.appendChild(apiMessage);
                 }
             } catch (err) {
@@ -264,7 +269,7 @@
             }
         });
 
-        function createMessage(text, className, finishReason = null) {
+        function createMessage(text, className, finishReason = null, stats = null) {
             const wrapper = document.createElement('div');
             wrapper.style.display = 'flex';
             wrapper.style.flexDirection = 'column';
@@ -281,11 +286,23 @@
             wrapper.appendChild(meta);
             wrapper.appendChild(bubble);
 
-            if (finishReason) {
-                const reasonLabel = document.createElement('div');
-                reasonLabel.className = 'finish-reason';
-                reasonLabel.textContent = 'finish_reason: ' + finishReason;
-                wrapper.appendChild(reasonLabel);
+            if (finishReason || stats) {
+                const infoRow = document.createElement('div');
+                infoRow.className = 'message-info';
+
+                const parts = [];
+                if (finishReason) {
+                    parts.push('finish: ' + finishReason);
+                }
+                if (stats && stats.durationMs) {
+                    parts.push('время: ' + stats.durationMs + ' мс');
+                }
+                if (stats && stats.totalTokens) {
+                    parts.push('токены: ' + stats.totalTokens + ' (' + stats.promptTokens + ' + ' + stats.completionTokens + ')');
+                }
+
+                infoRow.textContent = parts.join(' • ');
+                wrapper.appendChild(infoRow);
             }
 
             return wrapper;
