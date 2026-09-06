@@ -34,10 +34,11 @@ type config struct {
 }
 
 type chatRequest struct {
-	Message        string `json:"message"`
-	ResponseFormat string `json:"response_format"`
-	MaxTokens      *int   `json:"max_tokens"`
-	StopSequence   string `json:"stop_sequence"`
+	Message        string   `json:"message"`
+	ResponseFormat string   `json:"response_format"`
+	Temperature    *float64 `json:"temperature"`
+	MaxTokens      *int     `json:"max_tokens"`
+	StopSequence   string   `json:"stop_sequence"`
 }
 
 type chatResponse struct {
@@ -188,10 +189,11 @@ func handleChat(cfg config) http.HandlerFunc {
 		externalReq.Header.Set("Accept", "application/json")
 		setAuthHeader(externalReq, cfg)
 
-		log.Printf("Запрос к внешнему API: %s, message=%q, response_format=%s, max_tokens=%v, stop=%q",
+		log.Printf("Запрос к внешнему API: %s, message=%q, response_format=%s, temperature=%s, max_tokens=%s, stop=%q",
 			cfg.ExternalAPI,
 			truncate(req.Message, 80),
 			req.ResponseFormat,
+			formatFloatPtr(req.Temperature),
 			formatMaxTokens(req.MaxTokens),
 			req.StopSequence,
 		)
@@ -252,10 +254,18 @@ func formatMaxTokens(v *int) string {
 	return fmt.Sprintf("%d", *v)
 }
 
+func formatFloatPtr(v *float64) string {
+	if v == nil {
+		return "not set"
+	}
+	return fmt.Sprintf("%g", *v)
+}
+
 type openaiPayload struct {
 	Model          string              `json:"model"`
 	Messages       []map[string]string `json:"messages"`
 	ResponseFormat *responseFormat     `json:"response_format,omitempty"`
+	Temperature    *float64            `json:"temperature,omitempty"`
 	MaxTokens      *int                `json:"max_tokens,omitempty"`
 	Stop           string              `json:"stop,omitempty"`
 }
@@ -276,6 +286,7 @@ func buildPayload(cfg config, req chatRequest) ([]byte, error) {
 			Model:          defaultModel,
 			Messages:       buildMessages(cfg, req.Message),
 			ResponseFormat: rf,
+			Temperature:    req.Temperature,
 			MaxTokens:      req.MaxTokens,
 			Stop:           req.StopSequence,
 		})

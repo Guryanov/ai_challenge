@@ -177,6 +177,11 @@
         </div>
 
         <div class="tool-group">
+            <label for="temperature">Температура</label>
+            <input type="number" id="temperature" placeholder="Например, 0.7" min="0" max="2" step="0.1">
+        </div>
+
+        <div class="tool-group">
             <label for="max-tokens">Ограничение по длине ответа</label>
             <input type="number" id="max-tokens" placeholder="Например, 500" min="1">
         </div>
@@ -204,6 +209,7 @@
         const input = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
         const responseFormat = document.getElementById('response-format');
+        const temperature = document.getElementById('temperature');
         const maxTokens = document.getElementById('max-tokens');
         const stopSequence = document.getElementById('stop-sequence');
 
@@ -228,6 +234,7 @@
             const payload = {
                 message: message,
                 response_format: responseFormat.value,
+                temperature: parseFloat(temperature.value) || null,
                 max_tokens: parseInt(maxTokens.value, 10) || null,
                 stop_sequence: stopSequence.value.trim() || null
             };
