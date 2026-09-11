@@ -19,4 +19,4 @@ source .env.secrets
 source .env
 set +a
 
-go run main.go
+go run .
