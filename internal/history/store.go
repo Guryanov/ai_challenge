@@ -2,6 +2,7 @@
 package history
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -15,16 +16,24 @@ import (
 type Message struct {
 	Role             string    `json:"role"`
 	Content          string    `json:"content"`
+	IsSummary        bool      `json:"is_summary,omitempty"`
 	PromptTokens     int       `json:"prompt_tokens,omitempty"`
 	CompletionTokens int       `json:"completion_tokens,omitempty"`
 	TotalTokens      int       `json:"total_tokens,omitempty"`
 	Timestamp        time.Time `json:"timestamp,omitempty"`
 }
 
+// Session — состояние диалога одной сессии.
+type Session struct {
+	Compressed  bool      `json:"compressed"`
+	TotalTokens int       `json:"total_tokens"`
+	Messages    []Message `json:"messages"`
+}
+
 // Store описывает хранилище истории сообщений.
 type Store interface {
-	Load(sessionID string) ([]Message, error)
-	Save(sessionID string, messages []Message) error
+	LoadSession(sessionID string) (Session, error)
+	SaveSession(sessionID string, session Session) error
 	Delete(sessionID string) error
 }
 
@@ -47,9 +56,9 @@ func NewFileStore(baseDir string) (*FileStore, error) {
 	}, nil
 }
 
-// Load возвращает сохранённые сообщения для сессии.
-// Если файла ещё нет, возвращает пустой срез.
-func (s *FileStore) Load(sessionID string) ([]Message, error) {
+// LoadSession возвращает сохранённую сессию.
+// Поддерживает старый формат (JSON-массив сообщений) и новый формат (объект Session).
+func (s *FileStore) LoadSession(sessionID string) (Session, error) {
 	path := s.sessionFile(sessionID)
 
 	s.lock(sessionID).Lock()
@@ -58,29 +67,38 @@ func (s *FileStore) Load(sessionID string) ([]Message, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return Session{}, nil
 		}
-		return nil, fmt.Errorf("не удалось прочитать историю сессии %q: %w", sessionID, err)
+		return Session{}, fmt.Errorf("не удалось прочитать историю сессии %q: %w", sessionID, err)
 	}
 
-	var messages []Message
-	if err := json.Unmarshal(data, &messages); err != nil {
-		return nil, fmt.Errorf("не удалось распарсить историю сессии %q: %w", sessionID, err)
+	// Старый формат — просто массив сообщений.
+	if len(data) > 0 && bytes.TrimSpace(data)[0] == '[' {
+		var messages []Message
+		if err := json.Unmarshal(data, &messages); err != nil {
+			return Session{}, fmt.Errorf("не удалось распарсить историю сессии %q: %w", sessionID, err)
+		}
+		return Session{Messages: messages}, nil
 	}
 
-	return messages, nil
+	var session Session
+	if err := json.Unmarshal(data, &session); err != nil {
+		return Session{}, fmt.Errorf("не удалось распарсить историю сессии %q: %w", sessionID, err)
+	}
+
+	return session, nil
 }
 
-// Save атомарно сохраняет список сообщений для сессии.
-func (s *FileStore) Save(sessionID string, messages []Message) error {
+// SaveSession атомарно сохраняет сессию.
+func (s *FileStore) SaveSession(sessionID string, session Session) error {
 	now := time.Now().UTC()
-	for i := range messages {
-		if messages[i].Timestamp.IsZero() {
-			messages[i].Timestamp = now
+	for i := range session.Messages {
+		if session.Messages[i].Timestamp.IsZero() {
+			session.Messages[i].Timestamp = now
 		}
 	}
 
-	data, err := json.MarshalIndent(messages, "", "  ")
+	data, err := json.MarshalIndent(session, "", "  ")
 	if err != nil {
 		return fmt.Errorf("не удалось сериализовать историю сессии %q: %w", sessionID, err)
 	}

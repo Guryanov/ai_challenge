@@ -2,13 +2,14 @@ package main
 
 // chatRequest — входящий HTTP-запрос от фронтенда.
 type chatRequest struct {
-	Message        string   `json:"message"`
-	ResponseFormat string   `json:"response_format"`
-	Role           string   `json:"role"`
-	SessionID      string   `json:"session_id"`
-	Temperature    *float64 `json:"temperature"`
-	MaxTokens      *int     `json:"max_tokens"`
-	StopSequence   string   `json:"stop_sequence"`
+	Message         string   `json:"message"`
+	ResponseFormat  string   `json:"response_format"`
+	Role            string   `json:"role"`
+	SessionID       string   `json:"session_id"`
+	CompressHistory bool     `json:"compress_history"`
+	Temperature     *float64 `json:"temperature"`
+	MaxTokens       *int     `json:"max_tokens"`
+	StopSequence    string   `json:"stop_sequence"`
 }
 
 // chatResponse — HTTP-ответ фронтенду.
@@ -21,5 +22,6 @@ type chatResponse struct {
 	CompletionTokens   int    `json:"completion_tokens,omitempty"`
 	TotalTokens        int    `json:"total_tokens,omitempty"`
 	SessionTotalTokens int    `json:"session_total_tokens,omitempty"`
+	Compressed         bool   `json:"compressed,omitempty"`
 	Error              string `json:"error,omitempty"`
 }

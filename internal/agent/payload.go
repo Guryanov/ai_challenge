@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"ai-chat/internal/history"
@@ -53,3 +54,41 @@ func buildPayload(cfg Config, req AgentRequest, history []history.Message) ([]by
 		return json.Marshal(map[string]string{"message": userContent})
 	}
 }
+
+// buildSummaryPayload формирует запрос к LLM для генерации summary старых сообщений.
+func buildSummaryPayload(cfg Config, messages []history.Message) ([]byte, error) {
+	conversation := formatConversation(messages)
+
+	switch cfg.APIFormat {
+	case "openai":
+		return json.Marshal(openaiPayload{
+			Model: cfg.Model,
+			Messages: []map[string]string{
+				{"role": "system", "content": summarySystemPrompt},
+				{"role": "user", "content": conversation},
+			},
+			Temperature: ptrFloat64(0.3),
+			MaxTokens:   ptrInt(500),
+			Args:        []string{"-y", "@orchestrator-agent"},
+		})
+	default:
+		return json.Marshal(map[string]string{
+			"message": summarySystemPrompt + "\n\n" + conversation,
+		})
+	}
+}
+
+func formatConversation(messages []history.Message) string {
+	var b strings.Builder
+	for _, m := range messages {
+		role := m.Role
+		if m.IsSummary {
+			role = "summary"
+		}
+		b.WriteString(fmt.Sprintf("%s: %s\n", role, m.Content))
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func ptrFloat64(v float64) *float64 { return &v }
+func ptrInt(v int) *int             { return &v }

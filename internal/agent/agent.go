@@ -2,10 +2,16 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"ai-chat/internal/history"
 )
+
+const summarySystemPrompt = `Сделай краткое, но информативное summary диалога.
+Сохрани ключевые факты, контекст, имена, даты, договорённости и намерения пользователя.
+Ответь одним коротким текстом без приветствий и лишних комментариев.`
 
 // SimpleAgent — базовая реализация LLM-агента.
 // Пока выполняет один вызов API, но структура позволяет добавить:
@@ -41,29 +47,38 @@ func (a *SimpleAgent) WithTools(t ToolRegistry) *SimpleAgent {
 // Run выполняет один запрос к API с учётом истории сообщений.
 // В будущем здесь может быть цикл: observe → think → act.
 func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
-	start := time.Now()
-
 	// Загружаем историю текущей сессии.
-	historyMessages, err := a.loadHistory(req.SessionID)
+	session, err := a.loadSession(req.SessionID)
 	if err != nil {
 		return AgentResponse{}, err
 	}
 
-	payload, err := buildPayload(a.config, req, historyMessages)
+	compress := req.CompressHistory || session.Compressed
+
+	// При необходимости сжимаем старую историю в summary.
+	if compress {
+		if _, err := a.compressSession(&session); err != nil {
+			return AgentResponse{}, err
+		}
+	}
+
+	payload, err := buildPayload(a.config, req, session.Messages)
 	if err != nil {
 		return AgentResponse{}, err
 	}
 
+	mainStart := time.Now()
 	body, err := a.client.Call(payload)
 	if err != nil {
 		return AgentResponse{}, err
 	}
 
 	resp := extractResponse(a.config.APIFormat, req.ResponseFormat, body)
-	resp.Duration = time.Since(start)
+	resp.Duration = time.Since(mainStart)
+	resp.Compressed = session.Compressed
 
 	// Сохраняем новое сообщение пользователя и ответ ассистента.
-	sessionTotal, err := a.saveHistory(req.SessionID, historyMessages, req.Message, resp)
+	sessionTotal, err := a.saveHistory(req.SessionID, &session, req.Message, resp, compress)
 	if err != nil {
 		return AgentResponse{}, err
 	}
@@ -80,24 +95,24 @@ func (a *SimpleAgent) ClearHistory(sessionID string) error {
 	return a.history.Delete(sessionID)
 }
 
-func (a *SimpleAgent) loadHistory(sessionID string) ([]history.Message, error) {
+func (a *SimpleAgent) loadSession(sessionID string) (history.Session, error) {
 	if a.history == nil || sessionID == "" {
-		return nil, nil
+		return history.Session{}, nil
 	}
-	return a.history.Load(sessionID)
+	return a.history.LoadSession(sessionID)
 }
 
-func (a *SimpleAgent) saveHistory(sessionID string, prev []history.Message, userMessage string, resp AgentResponse) (int, error) {
+func (a *SimpleAgent) saveHistory(sessionID string, session *history.Session, userMessage string, resp AgentResponse, compress bool) (int, error) {
 	if a.history == nil || sessionID == "" {
 		return resp.TotalTokens, nil
 	}
 
-	sessionTotal := resp.TotalTokens
-	for _, m := range prev {
-		sessionTotal += m.TotalTokens
+	if compress {
+		session.Compressed = true
 	}
+	session.TotalTokens += resp.TotalTokens
 
-	messages := append(prev,
+	session.Messages = append(session.Messages,
 		history.Message{Role: "user", Content: userMessage},
 		history.Message{
 			Role:             "assistant",
@@ -108,11 +123,70 @@ func (a *SimpleAgent) saveHistory(sessionID string, prev []history.Message, user
 		},
 	)
 
-	if err := a.history.Save(sessionID, messages); err != nil {
+	if err := a.history.SaveSession(sessionID, *session); err != nil {
 		return 0, err
 	}
 
-	return sessionTotal, nil
+	return session.TotalTokens, nil
+}
+
+// compressSession заменяет сообщения, кроме двух последних, на summary.
+// Возвращает токены, потраченные на генерацию summary.
+func (a *SimpleAgent) compressSession(session *history.Session) (AgentResponse, error) {
+	if len(session.Messages) <= 2 {
+		return AgentResponse{}, nil
+	}
+
+	context := session.Messages[:len(session.Messages)-2]
+
+	// Если вся старая история уже представлена summary, пересчитывать нечего.
+	hasRaw := false
+	for _, m := range context {
+		if !m.IsSummary {
+			hasRaw = true
+			break
+		}
+	}
+	if !hasRaw {
+		return AgentResponse{}, nil
+	}
+
+	summaryText, summaryResp, err := a.summarize(context)
+	if err != nil {
+		return AgentResponse{}, fmt.Errorf("ошибка генерации summary: %w", err)
+	}
+
+	summaryMsg := history.Message{
+		Role:             "system",
+		Content:          "Контекст предыдущего диалога:\n" + summaryText,
+		IsSummary:        true,
+		PromptTokens:     summaryResp.PromptTokens,
+		CompletionTokens: summaryResp.CompletionTokens,
+		TotalTokens:      summaryResp.TotalTokens,
+	}
+
+	lastTwo := session.Messages[len(session.Messages)-2:]
+	session.Messages = append([]history.Message{summaryMsg}, lastTwo...)
+	session.Compressed = true
+	session.TotalTokens += summaryResp.TotalTokens
+
+	return summaryResp, nil
+}
+
+// summarize отправляет старые сообщения в LLM и возвращает их summary.
+func (a *SimpleAgent) summarize(messages []history.Message) (string, AgentResponse, error) {
+	payload, err := buildSummaryPayload(a.config, messages)
+	if err != nil {
+		return "", AgentResponse{}, fmt.Errorf("ошибка построения запроса summary: %w", err)
+	}
+
+	body, err := a.client.Call(payload)
+	if err != nil {
+		return "", AgentResponse{}, err
+	}
+
+	resp := extractResponse(a.config.APIFormat, "text", body)
+	return strings.TrimSpace(resp.Content), resp, nil
 }
 
 // ToolRegistry — интерфейс для реестра инструментов.

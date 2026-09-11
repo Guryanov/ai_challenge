@@ -37,13 +37,14 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 		}
 
 		result, err := a.Run(agent.AgentRequest{
-			Message:        req.Message,
-			ResponseFormat: req.ResponseFormat,
-			Role:           req.Role,
-			SessionID:      req.SessionID,
-			Temperature:    req.Temperature,
-			MaxTokens:      req.MaxTokens,
-			StopSequence:   req.StopSequence,
+			Message:         req.Message,
+			ResponseFormat:  req.ResponseFormat,
+			Role:            req.Role,
+			SessionID:       req.SessionID,
+			CompressHistory: req.CompressHistory,
+			Temperature:     req.Temperature,
+			MaxTokens:       req.MaxTokens,
+			StopSequence:    req.StopSequence,
 		})
 		if err != nil {
 			log.Printf("Ошибка агента: %v", err)
@@ -60,6 +61,7 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			CompletionTokens:   result.CompletionTokens,
 			TotalTokens:        result.TotalTokens,
 			SessionTotalTokens: result.SessionTotalTokens,
+			Compressed:         result.Compressed,
 		}
 
 		w.WriteHeader(http.StatusOK)

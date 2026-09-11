@@ -175,6 +175,30 @@
             text-align: center;
             margin-top: 40px;
         }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #555;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .checkbox-label input {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        .checkbox-label input:disabled {
+            cursor: not-allowed;
+        }
+        .compress-note {
+            font-size: 11px;
+            color: #888;
+        }
+        .compress-note.hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -215,6 +239,14 @@
         </div>
 
         <div class="tool-group">
+            <label for="compress-history" class="checkbox-label">
+                <input type="checkbox" id="compress-history">
+                Использовать сжатие истории
+            </label>
+            <div id="compress-note" class="compress-note hidden">Чтобы отключить, очистите историю</div>
+        </div>
+
+        <div class="tool-group">
             <button type="button" id="clear-history">Очистить историю</button>
         </div>
     </aside>
@@ -240,6 +272,8 @@
         const temperature = document.getElementById('temperature');
         const maxTokens = document.getElementById('max-tokens');
         const stopSequence = document.getElementById('stop-sequence');
+        const compressHistory = document.getElementById('compress-history');
+        const compressNote = document.getElementById('compress-note');
         const clearHistoryButton = document.getElementById('clear-history');
 
         // Генерируем или восстанавливаем идентификатор сессии.
@@ -248,6 +282,9 @@
             sessionId = 'sess_' + Math.random().toString(36).substring(2, 15);
             localStorage.setItem('chat_session_id', sessionId);
         }
+
+        // Восстанавливаем состояние сжатия истории.
+        compressHistory.checked = localStorage.getItem('compress_history') === 'true';
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -272,6 +309,7 @@
                 role: role.value || null,
                 response_format: responseFormat.value,
                 session_id: sessionId,
+                compress_history: compressHistory.checked,
                 temperature: parseFloat(temperature.value) || null,
                 max_tokens: parseInt(maxTokens.value, 10) || null,
                 stop_sequence: stopSequence.value.trim() || null
@@ -298,6 +336,13 @@
                         sessionTotalTokens: data.session_total_tokens
                     });
                     exchange.appendChild(apiMessage);
+
+                    if (data.compressed) {
+                        compressHistory.checked = true;
+                        compressHistory.disabled = true;
+                        compressNote.classList.remove('hidden');
+                        localStorage.setItem('compress_history', 'true');
+                    }
                 }
             } catch (err) {
                 const errorMessage = createMessage('Ошибка сети: ' + err.message, 'error-message');
@@ -364,9 +409,13 @@
                     return;
                 }
 
-                // Генерируем новый session_id и очищаем чат.
+                // Генерируем новый session_id, сбрасываем сжатие и очищаем чат.
                 sessionId = 'sess_' + Math.random().toString(36).substring(2, 15);
                 localStorage.setItem('chat_session_id', sessionId);
+                localStorage.removeItem('compress_history');
+                compressHistory.checked = false;
+                compressHistory.disabled = false;
+                compressNote.classList.add('hidden');
                 chat.innerHTML = '<div class="empty-state">Введите сообщение, чтобы начать диалог</div>';
             } catch (err) {
                 alert('Ошибка сети: ' + err.message);

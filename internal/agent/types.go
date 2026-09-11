@@ -4,13 +4,14 @@ import "time"
 
 // AgentRequest — запрос к агенту.
 type AgentRequest struct {
-	Message        string
-	ResponseFormat string
-	Role           string
-	SessionID      string
-	Temperature    *float64
-	MaxTokens      *int
-	StopSequence   string
+	Message         string
+	ResponseFormat  string
+	Role            string
+	SessionID       string
+	CompressHistory bool
+	Temperature     *float64
+	MaxTokens       *int
+	StopSequence    string
 }
 
 // AgentResponse — ответ агента.
@@ -21,6 +22,7 @@ type AgentResponse struct {
 	CompletionTokens   int
 	TotalTokens        int
 	SessionTotalTokens int
+	Compressed         bool
 	Duration           time.Duration
 }
 
