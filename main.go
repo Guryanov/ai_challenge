@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"ai-chat/internal/agent"
+	"ai-chat/internal/history"
 )
 
 func main() {
@@ -16,11 +17,18 @@ func main() {
 		cfg.Agent.AuthType,
 		cfg.Timeout,
 	)
-	llmAgent := agent.NewSimpleAgent(cfg.Agent, httpClient)
+
+	historyStore, err := history.NewFileStore("history")
+	if err != nil {
+		log.Fatalf("Ошибка создания хранилища истории: %v", err)
+	}
+
+	llmAgent := agent.NewSimpleAgent(cfg.Agent, httpClient).WithHistory(historyStore)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", serveIndex)
 	mux.HandleFunc("POST /api/chat", handleChat(llmAgent))
+	mux.HandleFunc("POST /api/chat/clear", handleClearHistory(llmAgent))
 
 	addr := ":" + cfg.Port
 	log.Printf("Сервер запущен на http://localhost%s", addr)
