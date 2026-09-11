@@ -5,7 +5,6 @@ type chatRequest struct {
 	Message        string   `json:"message"`
 	ResponseFormat string   `json:"response_format"`
 	Role           string   `json:"role"`
-	SessionID      string   `json:"session_id"`
 	Temperature    *float64 `json:"temperature"`
 	MaxTokens      *int     `json:"max_tokens"`
 	StopSequence   string   `json:"stop_sequence"`

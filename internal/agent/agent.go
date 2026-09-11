@@ -3,18 +3,17 @@ package agent
 import (
 	"encoding/json"
 	"time"
-
-	"ai-chat/internal/history"
 )
 
 // SimpleAgent — базовая реализация LLM-агента.
 // Пока выполняет один вызов API, но структура позволяет добавить:
+//   - хранение истории (HistoryStore)
 //   - инструменты (ToolRegistry)
 //   - многошаговое планирование (step loop)
 type SimpleAgent struct {
 	config  Config
 	client  APIClient
-	history history.Store
+	history HistoryStore
 	tools   ToolRegistry
 }
 
@@ -26,30 +25,12 @@ func NewSimpleAgent(cfg Config, client APIClient) *SimpleAgent {
 	}
 }
 
-// WithHistory добавляет хранилище истории.
-func (a *SimpleAgent) WithHistory(h history.Store) *SimpleAgent {
-	a.history = h
-	return a
-}
-
-// WithTools добавляет реестр инструментов.
-func (a *SimpleAgent) WithTools(t ToolRegistry) *SimpleAgent {
-	a.tools = t
-	return a
-}
-
-// Run выполняет один запрос к API с учётом истории сообщений.
+// Run выполняет один запрос к API.
 // В будущем здесь может быть цикл: observe → think → act.
 func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	start := time.Now()
 
-	// Загружаем историю текущей сессии.
-	historyMessages, err := a.loadHistory(req.SessionID)
-	if err != nil {
-		return AgentResponse{}, err
-	}
-
-	payload, err := buildPayload(a.config, req, historyMessages)
+	payload, err := buildPayload(a.config, req)
 	if err != nil {
 		return AgentResponse{}, err
 	}
@@ -62,40 +43,26 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	resp := extractResponse(a.config.APIFormat, req.ResponseFormat, body)
 	resp.Duration = time.Since(start)
 
-	// Сохраняем новое сообщение пользователя и ответ ассистента.
-	if err := a.saveHistory(req.SessionID, historyMessages, req.Message, resp.Content); err != nil {
-		return AgentResponse{}, err
-	}
-
 	return resp, nil
 }
 
-// ClearHistory очищает историю указанной сессии.
-func (a *SimpleAgent) ClearHistory(sessionID string) error {
-	if a.history == nil {
-		return nil
-	}
-	return a.history.Delete(sessionID)
+// WithHistory добавляет хранилище истории.
+func (a *SimpleAgent) WithHistory(h HistoryStore) *SimpleAgent {
+	a.history = h
+	return a
 }
 
-func (a *SimpleAgent) loadHistory(sessionID string) ([]history.Message, error) {
-	if a.history == nil || sessionID == "" {
-		return nil, nil
-	}
-	return a.history.Load(sessionID)
+// WithTools добавляет реестр инструментов.
+func (a *SimpleAgent) WithTools(t ToolRegistry) *SimpleAgent {
+	a.tools = t
+	return a
 }
 
-func (a *SimpleAgent) saveHistory(sessionID string, prev []history.Message, userMessage, assistantResponse string) error {
-	if a.history == nil || sessionID == "" {
-		return nil
-	}
-
-	messages := append(prev,
-		history.Message{Role: "user", Content: userMessage},
-		history.Message{Role: "assistant", Content: assistantResponse},
-	)
-
-	return a.history.Save(sessionID, messages)
+// HistoryStore — интерфейс для хранения истории сообщений.
+// Реализации могут хранить историю в памяти, в БД, в Redis и т.д.
+type HistoryStore interface {
+	Add(role, content string)
+	GetMessages() []map[string]string
 }
 
 // ToolRegistry — интерфейс для реестра инструментов.

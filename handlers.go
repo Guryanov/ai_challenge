@@ -40,7 +40,6 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			Message:        req.Message,
 			ResponseFormat: req.ResponseFormat,
 			Role:           req.Role,
-			SessionID:      req.SessionID,
 			Temperature:    req.Temperature,
 			MaxTokens:      req.MaxTokens,
 			StopSequence:   req.StopSequence,
@@ -63,32 +62,6 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			log.Printf("Ошибка кодирования ответа: %v", err)
-		}
-	}
-}
-
-func handleClearHistory(a agent.Agent) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		var req struct {
-			SessionID string `json:"session_id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
-			return
-		}
-		defer r.Body.Close()
-
-		if err := a.ClearHistory(req.SessionID); err != nil {
-			log.Printf("Ошибка очистки истории: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
 			log.Printf("Ошибка кодирования ответа: %v", err)
 		}
 	}

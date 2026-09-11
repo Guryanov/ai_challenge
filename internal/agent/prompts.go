@@ -1,10 +1,6 @@
 package agent
 
-import (
-	"strings"
-
-	"ai-chat/internal/history"
-)
+import "strings"
 
 func buildSystemPrompt(cfg Config, role string) string {
 	var parts []string
@@ -20,7 +16,7 @@ func buildSystemPrompt(cfg Config, role string) string {
 	return strings.Join(parts, "\n\n")
 }
 
-func buildMessages(cfg Config, req AgentRequest, history []history.Message) []map[string]string {
+func buildMessages(cfg Config, req AgentRequest) []map[string]string {
 	var messages []map[string]string
 
 	systemContent := buildSystemPrompt(cfg, req.Role)
@@ -28,12 +24,6 @@ func buildMessages(cfg Config, req AgentRequest, history []history.Message) []ma
 		messages = append(messages, map[string]string{"role": "system", "content": systemContent})
 	}
 
-	// Добавляем историю предыдущих сообщений.
-	for _, msg := range history {
-		messages = append(messages, map[string]string{"role": msg.Role, "content": msg.Content})
-	}
-
-	// Текущее сообщение пользователя.
 	userContent := req.Message
 	if cfg.UserPromptTemplate != "" {
 		userContent = strings.ReplaceAll(cfg.UserPromptTemplate, "{message}", req.Message)

@@ -3,8 +3,6 @@ package agent
 import (
 	"encoding/json"
 	"strings"
-
-	"ai-chat/internal/history"
 )
 
 type openaiPayload struct {
@@ -21,7 +19,7 @@ type responseFormat struct {
 	Type string `json:"type"`
 }
 
-func buildPayload(cfg Config, req AgentRequest, history []history.Message) ([]byte, error) {
+func buildPayload(cfg Config, req AgentRequest) ([]byte, error) {
 	switch cfg.APIFormat {
 	case "openai":
 		var rf *responseFormat
@@ -31,7 +29,7 @@ func buildPayload(cfg Config, req AgentRequest, history []history.Message) ([]by
 
 		return json.Marshal(openaiPayload{
 			Model:          cfg.Model,
-			Messages:       buildMessages(cfg, req, history),
+			Messages:       buildMessages(cfg, req),
 			ResponseFormat: rf,
 			Temperature:    req.Temperature,
 			MaxTokens:      req.MaxTokens,
