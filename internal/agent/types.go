@@ -7,6 +7,7 @@ type AgentRequest struct {
 	Message        string
 	ResponseFormat string
 	Role           string
+	SessionID      string
 	Temperature    *float64
 	MaxTokens      *int
 	StopSequence   string
@@ -26,4 +27,5 @@ type AgentResponse struct {
 // Реализации могут добавлять историю, инструменты и другие возможности.
 type Agent interface {
 	Run(req AgentRequest) (AgentResponse, error)
+	ClearHistory(sessionID string) error
 }

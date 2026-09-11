@@ -11,6 +11,8 @@
   - **generic** — отправляет `{"message": "..."}`;
   - **openai** — отправляет запрос в формате `/v1/chat/completions`.
 - LLM-агент в пакете `internal/agent` с расширяемой архитектурой (история, инструменты).
+- Хранение истории диалогов в JSON-файлах по `session_id`.
+- Кнопка очистки истории в веб-интерфейсе и endpoint `POST /api/chat/clear`.
 - Настройка промптов: `SYSTEM_PROMPT`, `ASSISTANT_PROMPT`, `USER_PROMPT_TEMPLATE`.
 - Панель управления в веб-интерфейсе: роль, формат ответа, температура, ограничение по длине, стоп-последовательность.
 - Отображение времени ответа и использованных токенов под сообщением API.
@@ -143,6 +145,14 @@ curl -s -X POST http://localhost:8080/api/chat \
   -d '{"message":"Привет"}'
 ```
 
+Очистка истории:
+
+```bash
+curl -s -X POST http://localhost:8080/api/chat/clear \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"your-session-id"}'
+```
+
 ## Структура
 
 - `main.go` — точка входа, создание агента и запуск HTTP-сервера.
@@ -158,6 +168,8 @@ curl -s -X POST http://localhost:8080/api/chat \
   - `prompts.go` — построение системного промпта и сообщений;
   - `extract.go` — разбор ответа внешнего API;
   - `types.go` — модели агента.
+- `internal/history/` — хранение истории диалогов:
+  - `store.go` — интерфейс `Store` и файловая реализация `FileStore`.
 - `static/index.html` — веб-интерфейс чата.
 - `.env.secrets` — чувствительные данные (не коммитится).
 - `.env.secrets.example` — пример секретов (коммитится).
