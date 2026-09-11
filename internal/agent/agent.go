@@ -63,9 +63,11 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	resp.Duration = time.Since(start)
 
 	// Сохраняем новое сообщение пользователя и ответ ассистента.
-	if err := a.saveHistory(req.SessionID, historyMessages, req.Message, resp.Content); err != nil {
+	sessionTotal, err := a.saveHistory(req.SessionID, historyMessages, req.Message, resp)
+	if err != nil {
 		return AgentResponse{}, err
 	}
+	resp.SessionTotalTokens = sessionTotal
 
 	return resp, nil
 }
@@ -85,17 +87,32 @@ func (a *SimpleAgent) loadHistory(sessionID string) ([]history.Message, error) {
 	return a.history.Load(sessionID)
 }
 
-func (a *SimpleAgent) saveHistory(sessionID string, prev []history.Message, userMessage, assistantResponse string) error {
+func (a *SimpleAgent) saveHistory(sessionID string, prev []history.Message, userMessage string, resp AgentResponse) (int, error) {
 	if a.history == nil || sessionID == "" {
-		return nil
+		return resp.TotalTokens, nil
+	}
+
+	sessionTotal := resp.TotalTokens
+	for _, m := range prev {
+		sessionTotal += m.TotalTokens
 	}
 
 	messages := append(prev,
 		history.Message{Role: "user", Content: userMessage},
-		history.Message{Role: "assistant", Content: assistantResponse},
+		history.Message{
+			Role:             "assistant",
+			Content:          resp.Content,
+			PromptTokens:     resp.PromptTokens,
+			CompletionTokens: resp.CompletionTokens,
+			TotalTokens:      resp.TotalTokens,
+		},
 	)
 
-	return a.history.Save(sessionID, messages)
+	if err := a.history.Save(sessionID, messages); err != nil {
+		return 0, err
+	}
+
+	return sessionTotal, nil
 }
 
 // ToolRegistry — интерфейс для реестра инструментов.

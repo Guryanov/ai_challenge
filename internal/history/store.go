@@ -13,9 +13,12 @@ import (
 
 // Message — одно сообщение в истории диалога.
 type Message struct {
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp,omitempty"`
+	Role             string    `json:"role"`
+	Content          string    `json:"content"`
+	PromptTokens     int       `json:"prompt_tokens,omitempty"`
+	CompletionTokens int       `json:"completion_tokens,omitempty"`
+	TotalTokens      int       `json:"total_tokens,omitempty"`
+	Timestamp        time.Time `json:"timestamp,omitempty"`
 }
 
 // Store описывает хранилище истории сообщений.

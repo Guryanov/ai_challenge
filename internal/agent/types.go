@@ -15,12 +15,13 @@ type AgentRequest struct {
 
 // AgentResponse — ответ агента.
 type AgentResponse struct {
-	Content          string
-	FinishReason     string
-	PromptTokens     int
-	CompletionTokens int
-	TotalTokens      int
-	Duration         time.Duration
+	Content            string
+	FinishReason       string
+	PromptTokens       int
+	CompletionTokens   int
+	TotalTokens        int
+	SessionTotalTokens int
+	Duration           time.Duration
 }
 
 // Agent — интерфейс LLM-агента.

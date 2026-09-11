@@ -294,7 +294,8 @@
                         durationMs: data.duration_ms,
                         promptTokens: data.prompt_tokens,
                         completionTokens: data.completion_tokens,
-                        totalTokens: data.total_tokens
+                        totalTokens: data.total_tokens,
+                        sessionTotalTokens: data.session_total_tokens
                     });
                     exchange.appendChild(apiMessage);
                 }
@@ -337,6 +338,9 @@
                 }
                 if (stats && stats.totalTokens) {
                     parts.push('токены: ' + stats.totalTokens + ' (' + stats.promptTokens + ' + ' + stats.completionTokens + ')');
+                }
+                if (stats && stats.sessionTotalTokens) {
+                    parts.push('всего за диалог: ' + stats.sessionTotalTokens);
                 }
 
                 infoRow.textContent = parts.join(' • ');

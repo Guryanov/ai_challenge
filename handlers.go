@@ -52,13 +52,14 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 		}
 
 		resp := chatResponse{
-			User:             req.Message,
-			Response:         result.Content,
-			FinishReason:     result.FinishReason,
-			DurationMs:       result.Duration.Milliseconds(),
-			PromptTokens:     result.PromptTokens,
-			CompletionTokens: result.CompletionTokens,
-			TotalTokens:      result.TotalTokens,
+			User:               req.Message,
+			Response:           result.Content,
+			FinishReason:       result.FinishReason,
+			DurationMs:         result.Duration.Milliseconds(),
+			PromptTokens:       result.PromptTokens,
+			CompletionTokens:   result.CompletionTokens,
+			TotalTokens:        result.TotalTokens,
+			SessionTotalTokens: result.SessionTotalTokens,
 		}
 
 		w.WriteHeader(http.StatusOK)
