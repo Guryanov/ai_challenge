@@ -175,6 +175,70 @@
             text-align: center;
             margin-top: 40px;
         }
+        .hidden {
+            display: none;
+        }
+        .facts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .fact-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            background-color: #f8f9fa;
+            padding: 6px 8px;
+            border-radius: 6px;
+        }
+        .fact-item button {
+            background: none;
+            border: none;
+            color: #dc3545;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .facts-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .facts-inputs input {
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .facts-inputs button {
+            padding: 8px 10px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .branch-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .branch-inputs input {
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .branch-inputs button {
+            padding: 8px 10px;
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -215,6 +279,36 @@
         </div>
 
         <div class="tool-group">
+            <label for="context-strategy">Стратегия контекста</label>
+            <select id="context-strategy">
+                <option value="full">Полная история</option>
+                <option value="summary">Summary (2 + summary)</option>
+                <option value="sliding_window">Sliding Window (10)</option>
+                <option value="facts">Facts / Key-Value</option>
+                <option value="branching">Ветки диалога</option>
+            </select>
+        </div>
+
+        <div id="facts-panel" class="tool-group hidden">
+            <label>Facts</label>
+            <div id="facts-list" class="facts-list"></div>
+            <div class="facts-inputs">
+                <input type="text" id="fact-key" placeholder="Ключ">
+                <input type="text" id="fact-value" placeholder="Значение">
+                <button type="button" id="add-fact">Добавить</button>
+            </div>
+        </div>
+
+        <div id="branches-panel" class="tool-group hidden">
+            <label for="branch-select">Активная ветка</label>
+            <select id="branch-select"></select>
+            <div class="branch-inputs">
+                <input type="text" id="new-branch-name" placeholder="Имя новой ветки">
+                <button type="button" id="create-branch">Создать ветку</button>
+            </div>
+        </div>
+
+        <div class="tool-group">
             <button type="button" id="clear-history">Очистить историю</button>
         </div>
     </aside>
@@ -240,7 +334,19 @@
         const temperature = document.getElementById('temperature');
         const maxTokens = document.getElementById('max-tokens');
         const stopSequence = document.getElementById('stop-sequence');
+        const contextStrategy = document.getElementById('context-strategy');
+        const factsPanel = document.getElementById('facts-panel');
+        const factsList = document.getElementById('facts-list');
+        const factKey = document.getElementById('fact-key');
+        const factValue = document.getElementById('fact-value');
+        const addFactButton = document.getElementById('add-fact');
+        const branchesPanel = document.getElementById('branches-panel');
+        const branchSelect = document.getElementById('branch-select');
+        const newBranchName = document.getElementById('new-branch-name');
+        const createBranchButton = document.getElementById('create-branch');
         const clearHistoryButton = document.getElementById('clear-history');
+
+        let facts = {};
 
         // Генерируем или восстанавливаем идентификатор сессии.
         let sessionId = localStorage.getItem('chat_session_id');
@@ -248,6 +354,13 @@
             sessionId = 'sess_' + Math.random().toString(36).substring(2, 15);
             localStorage.setItem('chat_session_id', sessionId);
         }
+
+        // Восстанавливаем стратегию контекста.
+        const savedStrategy = localStorage.getItem('context_strategy');
+        if (savedStrategy) {
+            contextStrategy.value = savedStrategy;
+        }
+        updateStrategyUI();
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -272,6 +385,8 @@
                 role: role.value || null,
                 response_format: responseFormat.value,
                 session_id: sessionId,
+                context_strategy: contextStrategy.value,
+                facts: facts,
                 temperature: parseFloat(temperature.value) || null,
                 max_tokens: parseInt(maxTokens.value, 10) || null,
                 stop_sequence: stopSequence.value.trim() || null
@@ -298,6 +413,8 @@
                         sessionTotalTokens: data.session_total_tokens
                     });
                     exchange.appendChild(apiMessage);
+
+                    updateStateFromResponse(data);
                 }
             } catch (err) {
                 const errorMessage = createMessage('Ошибка сети: ' + err.message, 'error-message');
@@ -364,14 +481,144 @@
                     return;
                 }
 
-                // Генерируем новый session_id и очищаем чат.
+                // Генерируем новый session_id, сбрасываем состояние и очищаем чат.
                 sessionId = 'sess_' + Math.random().toString(36).substring(2, 15);
                 localStorage.setItem('chat_session_id', sessionId);
+                localStorage.removeItem('context_strategy');
+                facts = {};
+                contextStrategy.value = 'full';
+                updateStrategyUI();
                 chat.innerHTML = '<div class="empty-state">Введите сообщение, чтобы начать диалог</div>';
             } catch (err) {
                 alert('Ошибка сети: ' + err.message);
             }
         });
+
+        contextStrategy.addEventListener('change', async () => {
+            localStorage.setItem('context_strategy', contextStrategy.value);
+            updateStrategyUI();
+            try {
+                const response = await fetch('/api/session/facts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, context_strategy: contextStrategy.value, facts: facts })
+                });
+                const data = await response.json();
+                if (response.ok) updateStateFromResponse(data);
+            } catch (err) {
+                console.error('Ошибка смены стратегии:', err);
+            }
+        });
+
+        function updateStrategyUI() {
+            const strategy = contextStrategy.value;
+            factsPanel.classList.toggle('hidden', strategy !== 'facts');
+            branchesPanel.classList.toggle('hidden', strategy !== 'branching');
+        }
+
+        function renderFacts() {
+            factsList.innerHTML = '';
+            for (const [key, value] of Object.entries(facts)) {
+                const item = document.createElement('div');
+                item.className = 'fact-item';
+                item.innerHTML = `<span><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</span> <button type="button" data-key="${escapeHtml(key)}">×</button>`;
+                factsList.appendChild(item);
+            }
+            factsList.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', () => deleteFact(btn.dataset.key));
+            });
+        }
+
+        addFactButton.addEventListener('click', () => {
+            const key = factKey.value.trim();
+            const value = factValue.value.trim();
+            if (!key) return;
+            facts[key] = value;
+            factKey.value = '';
+            factValue.value = '';
+            updateFactsOnServer();
+        });
+
+        async function deleteFact(key) {
+            delete facts[key];
+            await updateFactsOnServer();
+        }
+
+        async function updateFactsOnServer() {
+            try {
+                const response = await fetch('/api/session/facts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, context_strategy: contextStrategy.value, facts: facts })
+                });
+                const data = await response.json();
+                if (response.ok) updateStateFromResponse(data);
+            } catch (err) {
+                console.error('Ошибка обновления facts:', err);
+            }
+        }
+
+        function renderBranches(branches, active) {
+            branchSelect.innerHTML = '';
+            for (const name of branches || []) {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                if (name === active) option.selected = true;
+                branchSelect.appendChild(option);
+            }
+        }
+
+        branchSelect.addEventListener('change', async () => {
+            try {
+                const response = await fetch('/api/session/branches', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, branch_action: `switch:${branchSelect.value}` })
+                });
+                const data = await response.json();
+                if (response.ok) updateStateFromResponse(data);
+            } catch (err) {
+                console.error('Ошибка переключения ветки:', err);
+            }
+        });
+
+        createBranchButton.addEventListener('click', async () => {
+            const name = newBranchName.value.trim();
+            if (!name) return;
+            try {
+                const response = await fetch('/api/session/branches', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, branch_action: `create:${name}` })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    updateStateFromResponse(data);
+                    newBranchName.value = '';
+                } else {
+                    alert(data.error || 'Ошибка создания ветки');
+                }
+            } catch (err) {
+                console.error('Ошибка создания ветки:', err);
+            }
+        });
+
+        function updateStateFromResponse(data) {
+            if (data.active_branch) {
+                renderBranches(data.branches, data.active_branch);
+            }
+            if (data.facts) {
+                facts = data.facts;
+                renderFacts();
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
         function setLoading(loading) {
             sendButton.disabled = loading;

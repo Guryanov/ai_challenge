@@ -53,3 +53,29 @@ func buildPayload(cfg Config, req AgentRequest, history []history.Message) ([]by
 		return json.Marshal(map[string]string{"message": userContent})
 	}
 }
+
+// buildSummaryPayload формирует запрос к LLM для генерации summary старых сообщений.
+func buildSummaryPayload(cfg Config, messages []history.Message) ([]byte, error) {
+	conversation := formatConversation(messages)
+
+	switch cfg.APIFormat {
+	case "openai":
+		return json.Marshal(openaiPayload{
+			Model: cfg.Model,
+			Messages: []map[string]string{
+				{"role": "system", "content": summarySystemPrompt},
+				{"role": "user", "content": conversation},
+			},
+			Temperature: ptrFloat64(0.3),
+			MaxTokens:   ptrInt(500),
+			Args:        []string{"-y", "@orchestrator-agent"},
+		})
+	default:
+		return json.Marshal(map[string]string{
+			"message": summarySystemPrompt + "\n\n" + conversation,
+		})
+	}
+}
+
+func ptrFloat64(v float64) *float64 { return &v }
+func ptrInt(v int) *int             { return &v }

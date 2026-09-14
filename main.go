@@ -29,6 +29,8 @@ func main() {
 	mux.HandleFunc("GET /", serveIndex)
 	mux.HandleFunc("POST /api/chat", handleChat(llmAgent))
 	mux.HandleFunc("POST /api/chat/clear", handleClearHistory(llmAgent))
+	mux.HandleFunc("POST /api/session/facts", handleSessionFacts(llmAgent))
+	mux.HandleFunc("POST /api/session/branches", handleSessionBranches(llmAgent))
 
 	addr := ":" + cfg.Port
 	log.Printf("Сервер запущен на http://localhost%s", addr)

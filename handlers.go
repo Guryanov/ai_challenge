@@ -37,13 +37,16 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 		}
 
 		result, err := a.Run(agent.AgentRequest{
-			Message:        req.Message,
-			ResponseFormat: req.ResponseFormat,
-			Role:           req.Role,
-			SessionID:      req.SessionID,
-			Temperature:    req.Temperature,
-			MaxTokens:      req.MaxTokens,
-			StopSequence:   req.StopSequence,
+			Message:         req.Message,
+			ResponseFormat:  req.ResponseFormat,
+			Role:            req.Role,
+			SessionID:       req.SessionID,
+			ContextStrategy: agent.ContextStrategy(req.ContextStrategy),
+			Facts:           req.Facts,
+			BranchAction:    req.BranchAction,
+			Temperature:     req.Temperature,
+			MaxTokens:       req.MaxTokens,
+			StopSequence:    req.StopSequence,
 		})
 		if err != nil {
 			log.Printf("Ошибка агента: %v", err)
@@ -60,6 +63,10 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			CompletionTokens:   result.CompletionTokens,
 			TotalTokens:        result.TotalTokens,
 			SessionTotalTokens: result.SessionTotalTokens,
+			Compressed:         result.Compressed,
+			ActiveBranch:       result.ActiveBranch,
+			Branches:           result.Branches,
+			Facts:              result.Facts,
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -90,6 +97,78 @@ func handleClearHistory(a agent.Agent) http.HandlerFunc {
 
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+			log.Printf("Ошибка кодирования ответа: %v", err)
+		}
+	}
+}
+
+func handleSessionFacts(a agent.Agent) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		var req struct {
+			SessionID       string            `json:"session_id"`
+			ContextStrategy string            `json:"context_strategy"`
+			Facts           map[string]string `json:"facts"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
+			return
+		}
+		defer r.Body.Close()
+
+		result, err := a.Manage(agent.AgentRequest{
+			SessionID:       req.SessionID,
+			ContextStrategy: agent.ContextStrategy(req.ContextStrategy),
+			Facts:           req.Facts,
+		})
+		if err != nil {
+			log.Printf("Ошибка управления сессией: %v", err)
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(chatResponse{
+			ActiveBranch: result.ActiveBranch,
+			Branches:     result.Branches,
+			Facts:        result.Facts,
+		}); err != nil {
+			log.Printf("Ошибка кодирования ответа: %v", err)
+		}
+	}
+}
+
+func handleSessionBranches(a agent.Agent) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		var req struct {
+			SessionID    string `json:"session_id"`
+			BranchAction string `json:"branch_action"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
+			return
+		}
+		defer r.Body.Close()
+
+		result, err := a.Manage(agent.AgentRequest{
+			SessionID:    req.SessionID,
+			BranchAction: req.BranchAction,
+		})
+		if err != nil {
+			log.Printf("Ошибка управления веткой: %v", err)
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(chatResponse{
+			ActiveBranch: result.ActiveBranch,
+			Branches:     result.Branches,
+			Facts:        result.Facts,
+		}); err != nil {
 			log.Printf("Ошибка кодирования ответа: %v", err)
 		}
 	}

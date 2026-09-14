@@ -15,11 +15,11 @@ type APIClient interface {
 
 // httpAPIClient — реализация APIClient поверх HTTP.
 type httpAPIClient struct {
-	url     string
-	apiKey  string
+	url      string
+	apiKey   string
 	authType string
-	timeout time.Duration
-	client  *http.Client
+	timeout  time.Duration
+	client   *http.Client
 }
 
 // NewHTTPClient создаёт HTTP-клиент для внешнего API.
