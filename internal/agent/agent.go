@@ -121,13 +121,6 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	}
 	session.TotalTokens += ctxResult.summaryTokens
 
-	// Для стратегии summary сохраняем сжатую историю в сессии.
-	if strategy == StrategySummary {
-		branch := session.Branches[session.ActiveBranch]
-		branch.Messages = ctxResult.messages
-		session.Branches[session.ActiveBranch] = branch
-	}
-
 	// Добавляем facts в историю как системное сообщение, если используется стратегия facts.
 	messages := ctxResult.messages
 	if strategy == StrategyFacts && len(session.Facts) > 0 {

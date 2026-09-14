@@ -12,7 +12,7 @@ const (
 Сохрани ключевые факты, контекст, имена, даты, договорённости и намерения пользователя.
 Ответь одним коротким текстом без приветствий и лишних комментариев.`
 
-	slidingWindowSize = 10
+	slidingWindowSize = 5
 )
 
 // contextResult — результат применения стратегии контекста.
@@ -76,12 +76,19 @@ func (a *SimpleAgent) applySummary(messages []history.Message) (contextResult, e
 	}, nil
 }
 
-// applySlidingWindow оставляет только последние 10 сообщений.
+// applySlidingWindow оставляет только последние N обычных сообщений,
+// исключая summary-сообщения, чтобы не передавать устаревший контекст.
 func applySlidingWindow(messages []history.Message) contextResult {
-	if len(messages) <= slidingWindowSize {
-		return contextResult{messages: messages}
+	var raw []history.Message
+	for _, m := range messages {
+		if !m.IsSummary {
+			raw = append(raw, m)
+		}
 	}
-	return contextResult{messages: messages[len(messages)-slidingWindowSize:]}
+	if len(raw) <= slidingWindowSize {
+		return contextResult{messages: raw}
+	}
+	return contextResult{messages: raw[len(raw)-slidingWindowSize:]}
 }
 
 // formatConversation форматирует сообщения для summary.

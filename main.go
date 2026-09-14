@@ -35,6 +35,7 @@ func main() {
 	addr := ":" + cfg.Port
 	log.Printf("Сервер запущен на http://localhost%s", addr)
 	log.Printf("Внешний API: %s", cfg.Agent.ExternalAPI)
+	log.Printf("Таймаут запросов к API: %s", cfg.Timeout)
 	log.Printf("Формат API: %s, авторизация: %s", cfg.Agent.APIFormat, cfg.Agent.AuthType)
 	if cfg.Agent.APIFormat == "openai" {
 		logPrompts(cfg.Agent)

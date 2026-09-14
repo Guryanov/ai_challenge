@@ -25,7 +25,7 @@ type httpAPIClient struct {
 // NewHTTPClient создаёт HTTP-клиент для внешнего API.
 func NewHTTPClient(externalAPI, apiKey, authType string, timeout time.Duration) APIClient {
 	if timeout == 0 {
-		timeout = 60 * time.Second
+		timeout = 360 * time.Second
 	}
 	return &httpAPIClient{
 		url:      externalAPI,

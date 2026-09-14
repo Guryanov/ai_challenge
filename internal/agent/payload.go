@@ -67,7 +67,7 @@ func buildSummaryPayload(cfg Config, messages []history.Message) ([]byte, error)
 				{"role": "user", "content": conversation},
 			},
 			Temperature: ptrFloat64(0.3),
-			MaxTokens:   ptrInt(500),
+			MaxTokens:   ptrInt(cfg.SummaryMaxTokens),
 			Args:        []string{"-y", "@orchestrator-agent"},
 		})
 	default:

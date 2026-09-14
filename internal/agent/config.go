@@ -12,4 +12,5 @@ type Config struct {
 	UserPromptTemplate       string
 	OrchestratorInstructions string
 	Roles                    map[string]string
+	SummaryMaxTokens           int
 }

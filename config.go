@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,9 +12,10 @@ import (
 )
 
 const (
-	defaultExternalAPI = "https://httpbin.org/anything"
-	defaultModel       = "SMLab-ext/Kimi-K2.7-Code"
-	defaultTimeout     = 60 * time.Second
+	defaultExternalAPI      = "https://httpbin.org/anything"
+	defaultModel            = "SMLab-ext/Kimi-K2.7-Code"
+	defaultTimeout          = 60 * time.Second
+	defaultSummaryMaxTokens = 500
 )
 
 type serverConfig struct {
@@ -30,9 +32,18 @@ func getEnvOrDefault(key, defaultValue string) string {
 }
 
 func loadConfig() serverConfig {
+	timeout := defaultTimeout
+	if v := os.Getenv("TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			timeout = d
+		} else {
+			log.Printf("Предупреждение: не удалось распарсить TIMEOUT=%q, используется значение по умолчанию %s", v, defaultTimeout)
+		}
+	}
+
 	cfg := serverConfig{
 		Port:    os.Getenv("PORT"),
-		Timeout: defaultTimeout,
+		Timeout: timeout,
 		Agent: agent.Config{
 			ExternalAPI:              os.Getenv("EXTERNAL_API_URL"),
 			APIKey:                   os.Getenv("API_KEY"),
@@ -44,6 +55,7 @@ func loadConfig() serverConfig {
 			UserPromptTemplate:       os.Getenv("USER_PROMPT_TEMPLATE"),
 			OrchestratorInstructions: loadOrchestratorInstructions(),
 			Roles:                    loadRoles(),
+			SummaryMaxTokens:           parseIntEnv("SUMMARY_MAX_TOKENS", defaultSummaryMaxTokens),
 		},
 	}
 
@@ -73,6 +85,16 @@ func loadConfig() serverConfig {
 	}
 
 	return cfg
+}
+
+func parseIntEnv(key string, defaultValue int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+		log.Printf("Предупреждение: не удалось распарсить %s, используется значение по умолчанию %d", key, defaultValue)
+	}
+	return defaultValue
 }
 
 func loadOrchestratorInstructions() string {
