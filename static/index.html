@@ -453,6 +453,66 @@
         .profile-actions button:not(:disabled):hover {
             background-color: #e9ecef;
         }
+        .task-state {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .task-stages {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .task-stage {
+            font-size: 12px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            background-color: #e9ecef;
+            color: #666;
+        }
+        .task-stage.active {
+            background-color: #007bff;
+            color: #fff;
+        }
+        .task-stage.completed {
+            background-color: #28a745;
+            color: #fff;
+        }
+        .task-actions {
+            display: flex;
+            gap: 8px;
+            margin: 8px 4px 0;
+        }
+        .task-actions button {
+            flex: 1;
+            padding: 6px 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .task-actions button.approve {
+            background-color: #28a745;
+            color: #fff;
+        }
+        .task-actions button.reject {
+            background-color: #dc3545;
+            color: #fff;
+        }
+        .task-reason {
+            width: 100%;
+            margin-top: 6px;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 12px;
+            resize: vertical;
+        }
     </style>
 </head>
 <body>
@@ -469,6 +529,18 @@
                 <button type="button" id="edit-profile" disabled>Редактировать</button>
                 <button type="button" id="delete-profile" class="danger" disabled>Удалить</button>
             </div>
+        </div>
+
+        <div id="task-panel" class="tool-group hidden">
+            <label>Задание</label>
+            <div id="task-state" class="task-state">Нет активного задания</div>
+            <div class="task-stages">
+                <div class="task-stage" data-stage="planning">Планирование</div>
+                <div class="task-stage" data-stage="execution">Выполнение</div>
+                <div class="task-stage" data-stage="verification">Проверка</div>
+                <div class="task-stage" data-stage="completion">Завершение</div>
+            </div>
+            <button type="button" id="cancel-task" class="memory-add-button" style="background-color:#dc3545;">Отменить задание</button>
         </div>
 
         <div class="tool-group">
@@ -671,6 +743,11 @@
         const profileDescriptionInput = document.getElementById('profile-description');
         const profileCancelButton = document.getElementById('profile-cancel');
 
+        const taskPanel = document.getElementById('task-panel');
+        const taskStateLabel = document.getElementById('task-state');
+        const taskStageElements = document.querySelectorAll('.task-stage');
+        const cancelTaskButton = document.getElementById('cancel-task');
+
         const memoryTypes = {
             long_term: [
                 { value: 'technology', label: 'Технология' },
@@ -689,6 +766,7 @@
         let memoryState = { long_term: [], working: [] };
         let activeMemoryTab = 'long_term';
         let profiles = [];
+        let taskState = { stage: '', status: '', context: {} };
 
         // Генерируем или восстанавливаем идентификатор сессии.
         let sessionId = localStorage.getItem('chat_session_id');
@@ -728,6 +806,8 @@
                 localStorage.setItem('chat_session_id', sessionId);
                 chat.innerHTML = '<div class="empty-state">Введите сообщение, чтобы начать диалог</div>';
                 facts = {};
+                taskState = { stage: '', status: '', context: {} };
+                renderTaskPanel();
                 contextStrategy.value = 'full';
                 updateStrategyUI();
             }
@@ -763,6 +843,10 @@
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (taskState.status === 'pending') {
+                alert('Текущий этап ожидает утверждения. Используйте кнопки под ответом ассистента.');
+                return;
+            }
             const message = input.value.trim();
             if (!message) return;
 
@@ -812,7 +896,7 @@
                         completionTokens: data.completion_tokens,
                         totalTokens: data.total_tokens,
                         sessionTotalTokens: data.session_total_tokens
-                    });
+                    }, data.task_stage, data.task_status);
                     exchange.appendChild(apiMessage);
 
                     updateStateFromResponse(data);
@@ -826,7 +910,15 @@
             }
         });
 
-        function createMessage(text, className, finishReason = null, stats = null) {
+        const taskStageNames = {
+            planning: 'Планирование',
+            execution: 'Выполнение',
+            verification: 'Проверка',
+            completion: 'Завершение'
+        };
+        const taskStagesOrder = ['planning', 'execution', 'verification', 'completion'];
+
+        function createMessage(text, className, finishReason = null, stats = null, taskStage = null, taskStatus = null) {
             const wrapper = document.createElement('div');
             wrapper.style.display = 'flex';
             wrapper.style.flexDirection = 'column';
@@ -834,7 +926,11 @@
 
             const meta = document.createElement('div');
             meta.className = 'meta';
-            meta.textContent = className === 'user-message' ? 'Вы' : 'API';
+            if (taskStage && className === 'api-message') {
+                meta.textContent = (taskStageNames[taskStage] || taskStage) + (taskStatus === 'pending' ? ' • ожидает' : '');
+            } else {
+                meta.textContent = className === 'user-message' ? 'Вы' : 'API';
+            }
 
             const bubble = document.createElement('div');
             bubble.className = 'message ' + className;
@@ -857,6 +953,43 @@
                     });
                 });
                 wrapper.appendChild(actions);
+            }
+
+            if (className === 'api-message' && taskStatus === 'pending') {
+                const taskActions = document.createElement('div');
+                taskActions.className = 'task-actions';
+                taskActions.style.alignSelf = 'flex-start';
+                taskActions.innerHTML = `
+                    <button type="button" class="approve">Утвердить</button>
+                    <button type="button" class="reject">Отклонить</button>
+                `;
+                const reasonInput = document.createElement('textarea');
+                reasonInput.className = 'task-reason hidden';
+                reasonInput.placeholder = 'Причина отклонения (необязательно)';
+                reasonInput.rows = 2;
+
+                const approveBtn = taskActions.querySelector('.approve');
+                const rejectBtn = taskActions.querySelector('.reject');
+
+                approveBtn.addEventListener('click', () => {
+                    approveBtn.disabled = true;
+                    rejectBtn.disabled = true;
+                    sendTaskAction('approve');
+                });
+
+                rejectBtn.addEventListener('click', () => {
+                    if (reasonInput.classList.contains('hidden')) {
+                        reasonInput.classList.remove('hidden');
+                        reasonInput.focus();
+                        return;
+                    }
+                    approveBtn.disabled = true;
+                    rejectBtn.disabled = true;
+                    sendTaskAction('reject', reasonInput.value.trim());
+                });
+
+                wrapper.appendChild(taskActions);
+                wrapper.appendChild(reasonInput);
             }
 
             if (finishReason || stats) {
@@ -903,6 +1036,8 @@
                 localStorage.setItem('chat_session_id', sessionId);
                 localStorage.removeItem('context_strategy');
                 facts = {};
+                taskState = { stage: '', status: '', context: {} };
+                renderTaskPanel();
                 contextStrategy.value = 'full';
                 updateStrategyUI();
                 chat.innerHTML = '<div class="empty-state">Введите сообщение, чтобы начать диалог</div>';
@@ -1029,7 +1164,91 @@
                 facts = data.facts;
                 renderFacts();
             }
+            if (data.task_stage !== undefined) {
+                taskState = {
+                    stage: data.task_stage,
+                    status: data.task_status,
+                    context: data.task_context || {}
+                };
+                renderTaskPanel();
+            }
         }
+
+        function renderTaskPanel() {
+            if (!taskState.stage) {
+                taskPanel.classList.add('hidden');
+                input.disabled = false;
+                return;
+            }
+            taskPanel.classList.remove('hidden');
+            taskStateLabel.textContent = (taskStageNames[taskState.stage] || taskState.stage) +
+                (taskState.status === 'pending' ? ' • ожидает утверждения' : ' • утверждено');
+            const currentIndex = taskStagesOrder.indexOf(taskState.stage);
+            taskStageElements.forEach(el => {
+                const stage = el.dataset.stage;
+                const stageIndex = taskStagesOrder.indexOf(stage);
+                el.classList.toggle('active', stage === taskState.stage);
+                el.classList.toggle('completed', stageIndex < currentIndex);
+            });
+            input.disabled = taskState.status === 'pending';
+            sendButton.disabled = taskState.status === 'pending';
+        }
+
+        async function sendTaskAction(action, reason = '') {
+            setLoading(true);
+            try {
+                const response = await fetch('/api/task/' + action, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        context_strategy: contextStrategy.value,
+                        reason: reason
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok || data.error) {
+                    const errorMessage = createMessage(data.error || 'Неизвестная ошибка', 'error-message');
+                    chat.appendChild(errorMessage);
+                } else {
+                    const apiMessage = createMessage(data.response || '(пустой ответ)', 'api-message', data.finish_reason, {
+                        durationMs: data.duration_ms,
+                        promptTokens: data.prompt_tokens,
+                        completionTokens: data.completion_tokens,
+                        totalTokens: data.total_tokens,
+                        sessionTotalTokens: data.session_total_tokens
+                    }, data.task_stage, data.task_status);
+                    chat.appendChild(apiMessage);
+                    updateStateFromResponse(data);
+                }
+            } catch (err) {
+                const errorMessage = createMessage('Ошибка сети: ' + err.message, 'error-message');
+                chat.appendChild(errorMessage);
+            } finally {
+                setLoading(false);
+                scrollToBottom();
+            }
+        }
+
+        cancelTaskButton.addEventListener('click', async () => {
+            if (!confirm('Отменить текущее задание?')) return;
+            try {
+                const response = await fetch('/api/task/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId })
+                });
+                if (!response.ok) {
+                    const data = await response.json();
+                    alert('Ошибка отмены: ' + (data.error || 'Неизвестная ошибка'));
+                    return;
+                }
+                taskState = { stage: '', status: '', context: {} };
+                renderTaskPanel();
+            } catch (err) {
+                alert('Ошибка сети: ' + err.message);
+            }
+        });
 
         function escapeHtml(text) {
             const div = document.createElement('div');

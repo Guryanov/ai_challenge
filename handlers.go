@@ -74,6 +74,9 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			Facts:              result.Facts,
 			ProjectID:          result.ProjectID,
 			ProfileID:          result.ProfileID,
+			TaskStage:          result.TaskStage,
+			TaskStatus:         result.TaskStatus,
+			TaskContext:        result.TaskContext,
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -413,6 +416,121 @@ func handleDeleteProfile(store profile.Store) http.HandlerFunc {
 		if err := json.NewEncoder(w).Encode(profiles); err != nil {
 			log.Printf("Ошибка кодирования ответа: %v", err)
 		}
+	}
+}
+
+func handleTaskApprove(a agent.Agent) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		var req struct {
+			SessionID       string `json:"session_id"`
+			ContextStrategy string `json:"context_strategy"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
+			return
+		}
+		defer r.Body.Close()
+
+		result, err := a.Run(agent.AgentRequest{
+			SessionID:       req.SessionID,
+			TaskAction:      agent.TaskActionApprove,
+			ContextStrategy: agent.ContextStrategy(req.ContextStrategy),
+		})
+		if err != nil {
+			log.Printf("Ошибка утверждения этапа: %v", err)
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+
+		writeChatResponse(w, req.SessionID, result)
+	}
+}
+
+func handleTaskReject(a agent.Agent) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		var req struct {
+			SessionID       string `json:"session_id"`
+			Reason          string `json:"reason"`
+			ContextStrategy string `json:"context_strategy"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
+			return
+		}
+		defer r.Body.Close()
+
+		result, err := a.Run(agent.AgentRequest{
+			SessionID:       req.SessionID,
+			TaskAction:      agent.TaskActionReject,
+			RejectionReason: req.Reason,
+			ContextStrategy: agent.ContextStrategy(req.ContextStrategy),
+		})
+		if err != nil {
+			log.Printf("Ошибка отклонения этапа: %v", err)
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+
+		writeChatResponse(w, req.SessionID, result)
+	}
+}
+
+func handleTaskCancel(a agent.Agent) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		var req struct {
+			SessionID string `json:"session_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
+			return
+		}
+		defer r.Body.Close()
+
+		result, err := a.Manage(agent.AgentRequest{
+			SessionID:  req.SessionID,
+			TaskAction: "cancel",
+		})
+		if err != nil {
+			log.Printf("Ошибка отмены задания: %v", err)
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+
+		writeChatResponse(w, req.SessionID, result)
+	}
+}
+
+// writeChatResponse формирует chatResponse из AgentResponse.
+func writeChatResponse(w http.ResponseWriter, userMessage string, result agent.AgentResponse) {
+	resp := chatResponse{
+		User:               userMessage,
+		Response:           result.Content,
+		FinishReason:       result.FinishReason,
+		DurationMs:         result.Duration.Milliseconds(),
+		PromptTokens:       result.PromptTokens,
+		CompletionTokens:   result.CompletionTokens,
+		TotalTokens:        result.TotalTokens,
+		SessionTotalTokens: result.SessionTotalTokens,
+		Compressed:         result.Compressed,
+		ActiveBranch:       result.ActiveBranch,
+		Branches:           result.Branches,
+		Facts:              result.Facts,
+		ProjectID:          result.ProjectID,
+		ProfileID:          result.ProfileID,
+		TaskStage:          result.TaskStage,
+		TaskStatus:         result.TaskStatus,
+		TaskContext:        result.TaskContext,
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("Ошибка кодирования ответа: %v", err)
 	}
 }
 

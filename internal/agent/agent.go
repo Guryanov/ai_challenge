@@ -88,6 +88,12 @@ func (a *SimpleAgent) Manage(req AgentRequest) (AgentResponse, error) {
 		return AgentResponse{}, err
 	}
 
+	if req.TaskAction == "cancel" {
+		session.TaskStage = ""
+		session.TaskStatus = ""
+		session.TaskContext = history.TaskContext{}
+	}
+
 	if err := a.history.SaveSession(req.SessionID, session); err != nil {
 		return AgentResponse{}, err
 	}
@@ -132,6 +138,23 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 		return AgentResponse{}, err
 	}
 
+	// Определяем состояние конечного автомата задачи.
+	originalUserMessage := req.Message
+	switch {
+	case originalUserMessage != "":
+		// Новый запрос пользователя сбрасывает текущее задание и начинает планирование.
+		resetTaskState(&session, originalUserMessage)
+	case req.TaskAction != "":
+		// Утверждение или отклонение текущего этапа.
+		if err := applyTaskAction(&session, req.TaskAction, req.RejectionReason); err != nil {
+			return AgentResponse{}, err
+		}
+	case session.TaskStage != "" && session.TaskStatus == TaskStatusPending:
+		// Продолжаем текущий этап (например, после перезагрузки страницы).
+	default:
+		return AgentResponse{}, fmt.Errorf("сообщение не может быть пустым")
+	}
+
 	strategy := a.effectiveStrategy(session)
 
 	ctxResult, err := a.applyContextStrategy(&session, strategy)
@@ -170,7 +193,12 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 		messages = append([]history.Message{{Role: "system", Content: formatFacts(session.Facts)}}, messages...)
 	}
 
-	payload, err := buildPayload(a.config, req, messages, userProfileContext, projectContext)
+	// Формируем промпт текущего этапа задачи.
+	stagePrompt := buildTaskStagePrompt(session, projectContext, userProfileContext)
+	llmReq := req
+	llmReq.Message = stagePrompt
+
+	payload, err := buildPayload(a.config, llmReq, messages, userProfileContext, projectContext)
 	if err != nil {
 		return AgentResponse{}, err
 	}
@@ -185,8 +213,12 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	resp.Duration = time.Since(mainStart)
 	resp.Compressed = strategy == StrategySummary && len(session.Branches[session.ActiveBranch].Messages) > 2
 
+	// Сохраняем результат этапа в контексте задачи.
+	updateTaskContext(&session, resp.Content)
+	session.TaskStatus = TaskStatusPending
+
 	// Сохраняем новое сообщение пользователя и ответ ассистента.
-	sessionTotal, err := a.saveHistory(req.SessionID, &session, req.Message, resp)
+	sessionTotal, err := a.saveHistory(req.SessionID, &session, originalUserMessage, resp)
 	if err != nil {
 		return AgentResponse{}, err
 	}
@@ -197,6 +229,9 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	resp.Facts = session.Facts
 	resp.ProjectID = req.ProjectID
 	resp.ProfileID = req.ProfileID
+	resp.TaskStage = session.TaskStage
+	resp.TaskStatus = session.TaskStatus
+	resp.TaskContext = session.TaskContext
 
 	return resp, nil
 }
@@ -224,16 +259,16 @@ func (a *SimpleAgent) saveHistory(sessionID string, session *history.Session, us
 	session.TotalTokens += resp.TotalTokens
 
 	branch := session.Branches[session.ActiveBranch]
-	branch.Messages = append(branch.Messages,
-		history.Message{Role: "user", Content: userMessage},
-		history.Message{
-			Role:             "assistant",
-			Content:          resp.Content,
-			PromptTokens:     resp.PromptTokens,
-			CompletionTokens: resp.CompletionTokens,
-			TotalTokens:      resp.TotalTokens,
-		},
-	)
+	if userMessage != "" {
+		branch.Messages = append(branch.Messages, history.Message{Role: "user", Content: userMessage})
+	}
+	branch.Messages = append(branch.Messages, history.Message{
+		Role:             "assistant",
+		Content:          resp.Content,
+		PromptTokens:     resp.PromptTokens,
+		CompletionTokens: resp.CompletionTokens,
+		TotalTokens:      resp.TotalTokens,
+	})
 	session.Branches[session.ActiveBranch] = branch
 
 	if err := a.history.SaveSession(sessionID, *session); err != nil {

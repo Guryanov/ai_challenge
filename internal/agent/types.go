@@ -1,6 +1,10 @@
 package agent
 
-import "time"
+import (
+	"time"
+
+	"ai-chat/internal/history"
+)
 
 // ContextStrategy — стратегия управления контекстом диалога.
 type ContextStrategy string
@@ -24,6 +28,8 @@ type AgentRequest struct {
 	ContextStrategy ContextStrategy
 	Facts           map[string]string
 	BranchAction    string // create:<name> | switch:<name>
+	TaskAction      string // "approve" | "reject" | ""
+	RejectionReason string
 	Temperature     *float64
 	MaxTokens       *int
 	StopSequence    string
@@ -43,6 +49,9 @@ type AgentResponse struct {
 	Facts              map[string]string
 	ProjectID          string
 	ProfileID          string
+	TaskStage          string
+	TaskStatus         string
+	TaskContext        history.TaskContext
 	Duration           time.Duration
 }
 

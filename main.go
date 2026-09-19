@@ -52,6 +52,9 @@ func main() {
 	mux.HandleFunc("GET /api/profiles", handleListProfiles(profileStore))
 	mux.HandleFunc("POST /api/profiles", handleUpsertProfile(profileStore))
 	mux.HandleFunc("POST /api/profiles/delete", handleDeleteProfile(profileStore))
+	mux.HandleFunc("POST /api/task/approve", handleTaskApprove(llmAgent))
+	mux.HandleFunc("POST /api/task/reject", handleTaskReject(llmAgent))
+	mux.HandleFunc("POST /api/task/cancel", handleTaskCancel(llmAgent))
 
 	addr := ":" + cfg.Port
 	log.Printf("Сервер запущен на http://localhost%s", addr)
