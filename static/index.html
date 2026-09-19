@@ -239,11 +239,215 @@
             cursor: pointer;
             font-size: 13px;
         }
+        .memory-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .memory-tab {
+            flex: 1;
+            padding: 8px 4px;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .memory-tab.active {
+            background-color: #007bff;
+            color: #fff;
+            border-color: #007bff;
+        }
+        .memory-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 8px;
+        }
+        .memory-entry {
+            background-color: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 12px;
+        }
+        .memory-entry.auto-generated {
+            background-color: #f0f0f0;
+            color: #666;
+        }
+        .memory-entry-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .memory-entry-title {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .memory-entry.auto-generated .memory-entry-title {
+            color: #666;
+        }
+        .memory-entry-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .memory-entry-actions button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            color: #007bff;
+            padding: 0;
+        }
+        .memory-entry-actions button.delete {
+            color: #dc3545;
+        }
+        .memory-entry-content {
+            color: #555;
+            margin-bottom: 4px;
+            word-wrap: break-word;
+        }
+        .memory-entry-tags {
+            font-size: 11px;
+            color: #888;
+        }
+        .memory-entry-badge {
+            font-size: 10px;
+            color: #888;
+            font-style: italic;
+        }
+        .memory-add-button {
+            width: 100%;
+            padding: 8px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .memory-add-button:hover {
+            background-color: #0056b3;
+        }
+        .dialog {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .dialog.hidden {
+            display: none;
+        }
+        .dialog-content {
+            background-color: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            width: 90%;
+            max-width: 480px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .dialog-content h3 {
+            margin: 0 0 16px;
+            font-size: 18px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .form-group label {
+            font-size: 13px;
+            color: #555;
+            font-weight: 500;
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            font-family: inherit;
+        }
+        .form-group textarea {
+            resize: vertical;
+        }
+        .dialog-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 16px;
+        }
+        .dialog-buttons button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .dialog-buttons button.primary {
+            background-color: #007bff;
+            color: #fff;
+        }
+        .dialog-buttons button.secondary {
+            background-color: #f0f0f0;
+            color: #333;
+        }
+        .message-actions {
+            display: flex;
+            gap: 8px;
+            margin: 4px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+        .message-actions:hover {
+            opacity: 1;
+        }
+        .message-actions button {
+            background: none;
+            border: none;
+            color: #007bff;
+            cursor: pointer;
+            font-size: 11px;
+            padding: 2px 4px;
+        }
+        .message-actions button:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <aside id="sidebar">
         <h2>Настройки</h2>
+
+        <div class="tool-group">
+            <label for="project-id">Проект</label>
+            <input type="text" id="project-id" placeholder="my-project" title="Буквы, цифры, пробелы, дефисы и подчёркивания">
+        </div>
+
+        <div id="memory-panel" class="tool-group hidden">
+            <label>Память проекта</label>
+            <div class="memory-tabs">
+                <button type="button" class="memory-tab active" data-tab="long_term">Долгосрочная <span id="count-long_term">(0)</span></button>
+                <button type="button" class="memory-tab" data-tab="working">Рабочая <span id="count-working">(0)</span></button>
+            </div>
+            <div id="memory-list" class="memory-list"></div>
+            <button type="button" id="add-memory" class="memory-add-button">Добавить запись</button>
+        </div>
 
         <div class="tool-group">
             <label for="role">Роль</label>
@@ -324,6 +528,42 @@
         </form>
     </div>
 
+    <div id="memory-dialog" class="dialog hidden">
+        <div class="dialog-content">
+            <h3 id="memory-dialog-title">Запись памяти</h3>
+            <form id="memory-form">
+                <input type="hidden" id="memory-id">
+                <div class="form-group">
+                    <label for="memory-level">Уровень</label>
+                    <select id="memory-level" required>
+                        <option value="long_term">Долгосрочная</option>
+                        <option value="working">Рабочая</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="memory-type">Тип</label>
+                    <select id="memory-type" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="memory-title">Заголовок</label>
+                    <input type="text" id="memory-title" required>
+                </div>
+                <div class="form-group">
+                    <label for="memory-content">Содержимое</label>
+                    <textarea id="memory-content" rows="4"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="memory-tags">Теги (через запятую)</label>
+                    <input type="text" id="memory-tags">
+                </div>
+                <div class="dialog-buttons">
+                    <button type="button" id="memory-cancel" class="secondary">Отмена</button>
+                    <button type="submit" class="primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const chat = document.getElementById('chat');
         const form = document.getElementById('input-area');
@@ -345,8 +585,39 @@
         const newBranchName = document.getElementById('new-branch-name');
         const createBranchButton = document.getElementById('create-branch');
         const clearHistoryButton = document.getElementById('clear-history');
+        const projectIdInput = document.getElementById('project-id');
+        const memoryPanel = document.getElementById('memory-panel');
+        const memoryList = document.getElementById('memory-list');
+        const memoryTabs = document.querySelectorAll('.memory-tab');
+        const addMemoryButton = document.getElementById('add-memory');
+        const memoryDialog = document.getElementById('memory-dialog');
+        const memoryForm = document.getElementById('memory-form');
+        const memoryDialogTitle = document.getElementById('memory-dialog-title');
+        const memoryIdInput = document.getElementById('memory-id');
+        const memoryLevelInput = document.getElementById('memory-level');
+        const memoryTypeInput = document.getElementById('memory-type');
+        const memoryTitleInput = document.getElementById('memory-title');
+        const memoryContentInput = document.getElementById('memory-content');
+        const memoryTagsInput = document.getElementById('memory-tags');
+        const memoryCancelButton = document.getElementById('memory-cancel');
+
+        const memoryTypes = {
+            long_term: [
+                { value: 'technology', label: 'Технология' },
+                { value: 'pattern', label: 'Паттерн' },
+                { value: 'principle', label: 'Принцип' },
+                { value: 'knowledge', label: 'Знание' },
+                { value: 'summary', label: 'Summary' },
+            ],
+            working: [
+                { value: 'task', label: 'Задача' },
+                { value: 'entity', label: 'Сущность' },
+            ],
+        };
 
         let facts = {};
+        let memoryState = { long_term: [], working: [] };
+        let activeMemoryTab = 'long_term';
 
         // Генерируем или восстанавливаем идентификатор сессии.
         let sessionId = localStorage.getItem('chat_session_id');
@@ -354,6 +625,60 @@
             sessionId = 'sess_' + Math.random().toString(36).substring(2, 15);
             localStorage.setItem('chat_session_id', sessionId);
         }
+
+        // Восстанавливаем идентификатор проекта.
+        const savedProjectId = localStorage.getItem('chat_project_id');
+        if (savedProjectId) {
+            projectIdInput.value = savedProjectId;
+            loadMemory(savedProjectId);
+        }
+        updateMemoryPanel();
+
+        let projectIdDebounceTimer = null;
+
+        async function applyProjectIdChange() {
+            const newProjectId = projectIdInput.value.trim();
+            const oldProjectId = localStorage.getItem('chat_project_id') || '';
+
+            if (newProjectId && !isValidProjectId(newProjectId)) {
+                projectIdInput.value = oldProjectId;
+                updateMemoryPanel();
+                return;
+            }
+
+            localStorage.setItem('chat_project_id', newProjectId);
+
+            // При смене проекта генерируем новую сессию и очищаем чат.
+            if (newProjectId !== oldProjectId) {
+                sessionId = 'sess_' + Math.random().toString(36).substring(2, 15);
+                localStorage.setItem('chat_session_id', sessionId);
+                chat.innerHTML = '<div class="empty-state">Введите сообщение, чтобы начать диалог</div>';
+                facts = {};
+                contextStrategy.value = 'full';
+                updateStrategyUI();
+            }
+
+            memoryState = { long_term: [], working: [] };
+            updateMemoryPanel();
+            if (newProjectId) {
+                await loadMemory(newProjectId);
+            }
+        }
+
+        projectIdInput.addEventListener('input', () => {
+            if (projectIdDebounceTimer) {
+                clearTimeout(projectIdDebounceTimer);
+            }
+            projectIdDebounceTimer = setTimeout(applyProjectIdChange, 500);
+        });
+
+        projectIdInput.addEventListener('blur', () => {
+            if (projectIdDebounceTimer) {
+                clearTimeout(projectIdDebounceTimer);
+                projectIdDebounceTimer = null;
+            }
+            applyProjectIdChange();
+        });
 
         // Восстанавливаем стратегию контекста.
         const savedStrategy = localStorage.getItem('context_strategy');
@@ -385,6 +710,7 @@
                 role: role.value || null,
                 response_format: responseFormat.value,
                 session_id: sessionId,
+                project_id: projectIdInput.value.trim(),
                 context_strategy: contextStrategy.value,
                 facts: facts,
                 temperature: parseFloat(temperature.value) || null,
@@ -441,6 +767,22 @@
 
             wrapper.appendChild(meta);
             wrapper.appendChild(bubble);
+
+            if (className !== 'error-message') {
+                const actions = document.createElement('div');
+                actions.className = 'message-actions';
+                actions.style.alignSelf = className === 'user-message' ? 'flex-end' : 'flex-start';
+                actions.innerHTML = `
+                    <button type="button" data-action="long_term">Сохранить в долгосрочную</button>
+                    <button type="button" data-action="working">Сохранить в рабочую</button>
+                `;
+                actions.querySelectorAll('button').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        openMemoryDialog(null, btn.dataset.action, text);
+                    });
+                });
+                wrapper.appendChild(actions);
+            }
 
             if (finishReason || stats) {
                 const infoRow = document.createElement('div');
@@ -634,6 +976,215 @@
         function scrollToBottom() {
             chat.scrollTop = chat.scrollHeight;
         }
+
+        function isValidProjectId(projectId) {
+            return /^[\p{L}\p{N}\s\-_]+$/u.test(projectId);
+        }
+
+        async function loadMemory(projectId) {
+            if (!projectId) return;
+            console.log('Загрузка памяти для проекта:', projectId);
+            memoryList.innerHTML = '<div class="empty-state" style="margin-top:0;font-size:12px;">Загрузка...</div>';
+            try {
+                const response = await fetch('/api/memory?project_id=' + encodeURIComponent(projectId));
+                const data = await response.json();
+                console.log('Загруженная память:', data);
+                if (!response.ok) {
+                    memoryList.innerHTML = '<div class="empty-state" style="margin-top:0;font-size:12px;color:#c53030;">Ошибка: ' + escapeHtml(data.error || 'Неизвестная ошибка') + '</div>';
+                    return;
+                }
+                memoryState = data;
+                renderMemoryList();
+            } catch (err) {
+                console.error('Ошибка загрузки памяти:', err);
+                memoryList.innerHTML = '<div class="empty-state" style="margin-top:0;font-size:12px;color:#c53030;">Ошибка сети: ' + escapeHtml(err.message) + '</div>';
+            }
+        }
+
+        function updateMemoryPanel() {
+            const hasProject = projectIdInput.value.trim() !== '';
+            memoryPanel.classList.toggle('hidden', !hasProject);
+            updateMemoryCounters();
+            if (hasProject) {
+                renderMemoryList();
+            }
+        }
+
+        function updateMemoryCounters() {
+            document.getElementById('count-long_term').textContent = '(' + (memoryState.long_term || []).length + ')';
+            document.getElementById('count-working').textContent = '(' + (memoryState.working || []).length + ')';
+        }
+
+        function switchMemoryTab(level) {
+            activeMemoryTab = level;
+            memoryTabs.forEach(t => t.classList.toggle('active', t.dataset.tab === level));
+            renderMemoryList();
+        }
+
+        function renderMemoryList() {
+            updateMemoryCounters();
+            const entries = memoryState[activeMemoryTab] || [];
+            memoryList.innerHTML = '';
+            if (entries.length === 0) {
+                memoryList.innerHTML = '<div class="empty-state" style="margin-top:0;font-size:12px;">Нет записей</div>';
+                return;
+            }
+            for (const entry of entries) {
+                const el = document.createElement('div');
+                el.className = 'memory-entry' + (entry.auto_generated ? ' auto-generated' : '');
+                const tags = (entry.tags || []).join(', ');
+                el.innerHTML = `
+                    <div class="memory-entry-header">
+                        <span class="memory-entry-title">${escapeHtml(entry.title)}</span>
+                        <div class="memory-entry-actions">
+                            <button type="button" data-id="${escapeHtml(entry.id)}">✎</button>
+                            <button type="button" class="delete" data-id="${escapeHtml(entry.id)}">×</button>
+                        </div>
+                    </div>
+                    ${entry.content ? `<div class="memory-entry-content">${escapeHtml(entry.content)}</div>` : ''}
+                    <div class="memory-entry-tags">
+                        ${entry.auto_generated ? '<span class="memory-entry-badge">авто • </span>' : ''}
+                        ${entry.type}${tags ? ' • ' + escapeHtml(tags) : ''}
+                    </div>
+                `;
+                el.querySelector('button:not(.delete)').addEventListener('click', () => editMemoryEntry(entry.id));
+                el.querySelector('button.delete').addEventListener('click', () => deleteMemoryEntry(entry.id));
+                memoryList.appendChild(el);
+            }
+        }
+
+        memoryTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                switchMemoryTab(tab.dataset.tab);
+            });
+        });
+
+        function populateMemoryTypes(level, selectedType = '') {
+            memoryTypeInput.innerHTML = '';
+            for (const type of memoryTypes[level]) {
+                const option = document.createElement('option');
+                option.value = type.value;
+                option.textContent = type.label;
+                memoryTypeInput.appendChild(option);
+            }
+            memoryTypeInput.value = selectedType || memoryTypeInput.options[0]?.value || '';
+        }
+
+        memoryLevelInput.addEventListener('change', () => {
+            populateMemoryTypes(memoryLevelInput.value, memoryLevelInput.value === 'long_term' ? 'knowledge' : 'task');
+        });
+
+        addMemoryButton.addEventListener('click', () => {
+            openMemoryDialog();
+        });
+
+        function openMemoryDialog(entry = null, level = null, prefilledContent = '') {
+            memoryForm.reset();
+            const defaultLevel = level || activeMemoryTab || 'long_term';
+            memoryLevelInput.value = defaultLevel;
+
+            const defaultType = entry ? entry.type : (defaultLevel === 'long_term' ? 'knowledge' : 'task');
+            populateMemoryTypes(defaultLevel, defaultType);
+
+            if (entry) {
+                memoryDialogTitle.textContent = 'Редактировать запись';
+                memoryIdInput.value = entry.id;
+                memoryTitleInput.value = entry.title;
+                memoryContentInput.value = entry.content || '';
+                memoryTagsInput.value = (entry.tags || []).join(', ');
+            } else {
+                memoryDialogTitle.textContent = 'Новая запись';
+                memoryIdInput.value = '';
+                memoryContentInput.value = prefilledContent;
+            }
+            memoryDialog.classList.remove('hidden');
+        }
+
+        function editMemoryEntry(entryId) {
+            for (const level of ['long_term', 'working']) {
+                const entry = (memoryState[level] || []).find(e => e.id === entryId);
+                if (entry) {
+                    openMemoryDialog(entry, level);
+                    return;
+                }
+            }
+        }
+
+        async function deleteMemoryEntry(entryId) {
+            if (!confirm('Удалить запись?')) return;
+            try {
+                const response = await fetch('/api/memory/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: projectIdInput.value.trim(), entry_id: entryId })
+                });
+                if (!response.ok) {
+                    const data = await response.json();
+                    alert('Ошибка удаления: ' + (data.error || 'Неизвестная ошибка'));
+                    return;
+                }
+                memoryState = await response.json();
+                renderMemoryList();
+            } catch (err) {
+                alert('Ошибка сети: ' + err.message);
+            }
+        }
+
+        memoryCancelButton.addEventListener('click', () => {
+            memoryDialog.classList.add('hidden');
+        });
+
+        memoryDialog.addEventListener('click', (e) => {
+            if (e.target === memoryDialog) {
+                memoryDialog.classList.add('hidden');
+            }
+        });
+
+        memoryForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const projectId = projectIdInput.value.trim();
+            if (!projectId) {
+                alert('Сначала введите Project ID');
+                return;
+            }
+            const savedLevel = memoryLevelInput.value;
+            const title = memoryTitleInput.value.trim();
+            if (!title) {
+                alert('Заголовок обязателен');
+                return;
+            }
+            const entry = {
+                id: memoryIdInput.value || undefined,
+                type: memoryTypeInput.value,
+                title: title,
+                content: memoryContentInput.value.trim(),
+                tags: memoryTagsInput.value.split(',').map(t => t.trim()).filter(Boolean)
+            };
+            if (!entry.type) {
+                alert('Тип записи обязателен');
+                return;
+            }
+            console.log('Сохранение записи памяти:', { project_id: projectId, entry: entry });
+            try {
+                const response = await fetch('/api/memory', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: projectId, entry: entry })
+                });
+                const data = await response.json();
+                console.log('Ответ сохранения памяти:', data);
+                if (!response.ok) {
+                    alert('Ошибка сохранения: ' + (data.error || 'Неизвестная ошибка'));
+                    return;
+                }
+                memoryState = data;
+                memoryDialog.classList.add('hidden');
+                switchMemoryTab(savedLevel);
+            } catch (err) {
+                console.error('Ошибка сети при сохранении памяти:', err);
+                alert('Ошибка сети: ' + err.message);
+            }
+        });
     </script>
 </body>
 </html>

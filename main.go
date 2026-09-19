@@ -6,6 +6,7 @@ import (
 
 	"ai-chat/internal/agent"
 	"ai-chat/internal/history"
+	"ai-chat/internal/memory"
 )
 
 func main() {
@@ -23,7 +24,14 @@ func main() {
 		log.Fatalf("Ошибка создания хранилища истории: %v", err)
 	}
 
-	llmAgent := agent.NewSimpleAgent(cfg.Agent, httpClient).WithHistory(historyStore)
+	memoryStore, err := memory.NewFileStore("memory")
+	if err != nil {
+		log.Fatalf("Ошибка создания хранилища памяти: %v", err)
+	}
+
+	llmAgent := agent.NewSimpleAgent(cfg.Agent, httpClient).
+		WithHistory(historyStore).
+		WithMemory(memoryStore)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", serveIndex)
@@ -31,6 +39,9 @@ func main() {
 	mux.HandleFunc("POST /api/chat/clear", handleClearHistory(llmAgent))
 	mux.HandleFunc("POST /api/session/facts", handleSessionFacts(llmAgent))
 	mux.HandleFunc("POST /api/session/branches", handleSessionBranches(llmAgent))
+	mux.HandleFunc("GET /api/memory", handleGetMemory(memoryStore))
+	mux.HandleFunc("POST /api/memory", handleUpsertMemory(memoryStore, llmAgent))
+	mux.HandleFunc("POST /api/memory/delete", handleDeleteMemory(memoryStore))
 
 	addr := ":" + cfg.Port
 	log.Printf("Сервер запущен на http://localhost%s", addr)

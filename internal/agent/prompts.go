@@ -20,12 +20,16 @@ func buildSystemPrompt(cfg Config, role string) string {
 	return strings.Join(parts, "\n\n")
 }
 
-func buildMessages(cfg Config, req AgentRequest, history []history.Message) []map[string]string {
+func buildMessages(cfg Config, req AgentRequest, history []history.Message, projectContext string) []map[string]string {
 	var messages []map[string]string
 
 	systemContent := buildSystemPrompt(cfg, req.Role)
 	if systemContent != "" {
 		messages = append(messages, map[string]string{"role": "system", "content": systemContent})
+	}
+
+	if projectContext != "" {
+		messages = append(messages, map[string]string{"role": "system", "content": projectContext})
 	}
 
 	// Добавляем историю предыдущих сообщений.

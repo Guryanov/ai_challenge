@@ -6,6 +6,7 @@ type chatRequest struct {
 	ResponseFormat  string            `json:"response_format"`
 	Role            string            `json:"role"`
 	SessionID       string            `json:"session_id"`
+	ProjectID       string            `json:"project_id"`
 	ContextStrategy string            `json:"context_strategy"`
 	Facts           map[string]string `json:"facts"`
 	BranchAction    string            `json:"branch_action"`
@@ -28,5 +29,6 @@ type chatResponse struct {
 	ActiveBranch       string            `json:"active_branch,omitempty"`
 	Branches           []string          `json:"branches,omitempty"`
 	Facts              map[string]string `json:"facts,omitempty"`
+	ProjectID          string            `json:"project_id,omitempty"`
 	Error              string            `json:"error,omitempty"`
 }

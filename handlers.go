@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"ai-chat/internal/agent"
+	"ai-chat/internal/memory"
 )
 
 //go:embed static/index.html
@@ -41,6 +42,7 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			ResponseFormat:  req.ResponseFormat,
 			Role:            req.Role,
 			SessionID:       req.SessionID,
+			ProjectID:       req.ProjectID,
 			ContextStrategy: agent.ContextStrategy(req.ContextStrategy),
 			Facts:           req.Facts,
 			BranchAction:    req.BranchAction,
@@ -67,6 +69,7 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			ActiveBranch:       result.ActiveBranch,
 			Branches:           result.Branches,
 			Facts:              result.Facts,
+			ProjectID:          result.ProjectID,
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -169,6 +172,135 @@ func handleSessionBranches(a agent.Agent) http.HandlerFunc {
 			Branches:     result.Branches,
 			Facts:        result.Facts,
 		}); err != nil {
+			log.Printf("Ошибка кодирования ответа: %v", err)
+		}
+	}
+}
+
+func handleGetMemory(store memory.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		projectID := r.URL.Query().Get("project_id")
+		if projectID == "" {
+			writeError(w, http.StatusBadRequest, "project_id обязателен")
+			return
+		}
+
+		mem, err := store.Load(projectID)
+		if err != nil {
+			log.Printf("Ошибка загрузки памяти: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(mem); err != nil {
+			log.Printf("Ошибка кодирования ответа: %v", err)
+		}
+	}
+}
+
+// memorySummarizer запускает авто-summary долгосрочной памяти при необходимости.
+type memorySummarizer interface {
+	SummarizeMemoryIfNeeded(projectID string) (memory.Memory, error)
+}
+
+func handleUpsertMemory(store memory.Store, summarizer memorySummarizer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		var req struct {
+			ProjectID string       `json:"project_id"`
+			Entry     memory.Entry `json:"entry"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
+			return
+		}
+		defer r.Body.Close()
+
+		if req.ProjectID == "" {
+			writeError(w, http.StatusBadRequest, "project_id обязателен")
+			return
+		}
+
+		mem, err := store.Load(req.ProjectID)
+		if err != nil {
+			log.Printf("Ошибка загрузки памяти: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		if err := memory.UpsertEntry(&mem, req.Entry); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		if err := store.Save(req.ProjectID, mem); err != nil {
+			log.Printf("Ошибка сохранения памяти: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		// После сохранения проверяем необходимость авто-summary.
+		mem, err = summarizer.SummarizeMemoryIfNeeded(req.ProjectID)
+		if err != nil {
+			log.Printf("Ошибка авто-summary памяти: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(mem); err != nil {
+			log.Printf("Ошибка кодирования ответа: %v", err)
+		}
+	}
+}
+
+func handleDeleteMemory(store memory.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		var req struct {
+			ProjectID string `json:"project_id"`
+			EntryID   string `json:"entry_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
+			return
+		}
+		defer r.Body.Close()
+
+		if req.ProjectID == "" {
+			writeError(w, http.StatusBadRequest, "project_id обязателен")
+			return
+		}
+		if req.EntryID == "" {
+			writeError(w, http.StatusBadRequest, "entry_id обязателен")
+			return
+		}
+
+		mem, err := store.Load(req.ProjectID)
+		if err != nil {
+			log.Printf("Ошибка загрузки памяти: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		if err := memory.DeleteEntry(&mem, req.EntryID); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		if err := store.Save(req.ProjectID, mem); err != nil {
+			log.Printf("Ошибка сохранения памяти: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(mem); err != nil {
 			log.Printf("Ошибка кодирования ответа: %v", err)
 		}
 	}

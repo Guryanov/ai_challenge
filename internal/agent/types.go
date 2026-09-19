@@ -19,6 +19,7 @@ type AgentRequest struct {
 	ResponseFormat  string
 	Role            string
 	SessionID       string
+	ProjectID       string
 	ContextStrategy ContextStrategy
 	Facts           map[string]string
 	BranchAction    string // create:<name> | switch:<name>
@@ -39,6 +40,7 @@ type AgentResponse struct {
 	ActiveBranch       string
 	Branches           []string
 	Facts              map[string]string
+	ProjectID          string
 	Duration           time.Duration
 }
 

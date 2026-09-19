@@ -1,5 +1,9 @@
 package agent
 
+import (
+	"ai-chat/internal/memory"
+)
+
 // Config — настройки агента.
 type Config struct {
 	Model                    string
@@ -12,5 +16,6 @@ type Config struct {
 	UserPromptTemplate       string
 	OrchestratorInstructions string
 	Roles                    map[string]string
-	SummaryMaxTokens           int
+	SummaryMaxTokens         int
+	MemoryStore              memory.Store
 }
