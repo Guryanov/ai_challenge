@@ -428,11 +428,48 @@
         .message-actions button:hover {
             text-decoration: underline;
         }
+        .profile-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .profile-actions button {
+            flex: 1;
+            padding: 6px 4px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background-color: #f8f9fa;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .profile-actions button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .profile-actions button.danger {
+            color: #dc3545;
+            border-color: #dc3545;
+        }
+        .profile-actions button:not(:disabled):hover {
+            background-color: #e9ecef;
+        }
     </style>
 </head>
 <body>
     <aside id="sidebar">
         <h2>Настройки</h2>
+
+        <div class="tool-group">
+            <label for="profile-select">Профиль</label>
+            <select id="profile-select">
+                <option value="">—</option>
+            </select>
+            <div class="profile-actions">
+                <button type="button" id="create-profile">Создать</button>
+                <button type="button" id="edit-profile" disabled>Редактировать</button>
+                <button type="button" id="delete-profile" class="danger" disabled>Удалить</button>
+            </div>
+        </div>
 
         <div class="tool-group">
             <label for="project-id">Проект</label>
@@ -564,6 +601,27 @@
         </div>
     </div>
 
+    <div id="profile-dialog" class="dialog hidden">
+        <div class="dialog-content">
+            <h3 id="profile-dialog-title">Профиль</h3>
+            <form id="profile-form">
+                <input type="hidden" id="profile-id">
+                <div class="form-group">
+                    <label for="profile-name">Имя профиля</label>
+                    <input type="text" id="profile-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="profile-description">Описание пользователя</label>
+                    <textarea id="profile-description" rows="6" placeholder="Расскажите, кто вы, ваши цели, стиль общения, предпочтения..."></textarea>
+                </div>
+                <div class="dialog-buttons">
+                    <button type="button" id="profile-cancel" class="secondary">Отмена</button>
+                    <button type="submit" class="primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const chat = document.getElementById('chat');
         const form = document.getElementById('input-area');
@@ -601,6 +659,18 @@
         const memoryTagsInput = document.getElementById('memory-tags');
         const memoryCancelButton = document.getElementById('memory-cancel');
 
+        const profileSelect = document.getElementById('profile-select');
+        const createProfileButton = document.getElementById('create-profile');
+        const editProfileButton = document.getElementById('edit-profile');
+        const deleteProfileButton = document.getElementById('delete-profile');
+        const profileDialog = document.getElementById('profile-dialog');
+        const profileForm = document.getElementById('profile-form');
+        const profileDialogTitle = document.getElementById('profile-dialog-title');
+        const profileIdInput = document.getElementById('profile-id');
+        const profileNameInput = document.getElementById('profile-name');
+        const profileDescriptionInput = document.getElementById('profile-description');
+        const profileCancelButton = document.getElementById('profile-cancel');
+
         const memoryTypes = {
             long_term: [
                 { value: 'technology', label: 'Технология' },
@@ -618,6 +688,7 @@
         let facts = {};
         let memoryState = { long_term: [], working: [] };
         let activeMemoryTab = 'long_term';
+        let profiles = [];
 
         // Генерируем или восстанавливаем идентификатор сессии.
         let sessionId = localStorage.getItem('chat_session_id');
@@ -625,6 +696,9 @@
             sessionId = 'sess_' + Math.random().toString(36).substring(2, 15);
             localStorage.setItem('chat_session_id', sessionId);
         }
+
+        // Загружаем список профилей и восстанавливаем активный профиль.
+        loadProfiles();
 
         // Восстанавливаем идентификатор проекта.
         const savedProjectId = localStorage.getItem('chat_project_id');
@@ -711,6 +785,7 @@
                 response_format: responseFormat.value,
                 session_id: sessionId,
                 project_id: projectIdInput.value.trim(),
+                profile_id: profileSelect.value,
                 context_strategy: contextStrategy.value,
                 facts: facts,
                 temperature: parseFloat(temperature.value) || null,
@@ -1182,6 +1257,153 @@
                 switchMemoryTab(savedLevel);
             } catch (err) {
                 console.error('Ошибка сети при сохранении памяти:', err);
+                alert('Ошибка сети: ' + err.message);
+            }
+        });
+
+        // --- Профили пользователей ---
+
+        async function loadProfiles() {
+            try {
+                const response = await fetch('/api/profiles');
+                if (!response.ok) {
+                    console.error('Ошибка загрузки профилей:', await response.text());
+                    return;
+                }
+                profiles = await response.json();
+                renderProfileSelect();
+            } catch (err) {
+                console.error('Ошибка загрузки профилей:', err);
+            }
+        }
+
+        function renderProfileSelect() {
+            const currentValue = profileSelect.value;
+            profileSelect.innerHTML = '<option value="">—</option>';
+            for (const p of profiles) {
+                const option = document.createElement('option');
+                option.value = p.id;
+                option.textContent = p.name;
+                profileSelect.appendChild(option);
+            }
+
+            const savedProfileId = localStorage.getItem('chat_profile_id');
+            if (savedProfileId && profiles.some(p => p.id === savedProfileId)) {
+                profileSelect.value = savedProfileId;
+            } else if (currentValue && profiles.some(p => p.id === currentValue)) {
+                profileSelect.value = currentValue;
+            } else {
+                profileSelect.value = '';
+                localStorage.removeItem('chat_profile_id');
+            }
+            updateProfileActions();
+        }
+
+        function updateProfileActions() {
+            const hasSelection = profileSelect.value !== '';
+            editProfileButton.disabled = !hasSelection;
+            deleteProfileButton.disabled = !hasSelection;
+        }
+
+        profileSelect.addEventListener('change', () => {
+            const profileId = profileSelect.value;
+            if (profileId) {
+                localStorage.setItem('chat_profile_id', profileId);
+            } else {
+                localStorage.removeItem('chat_profile_id');
+            }
+            updateProfileActions();
+        });
+
+        createProfileButton.addEventListener('click', () => {
+            openProfileDialog();
+        });
+
+        editProfileButton.addEventListener('click', () => {
+            const p = profiles.find(p => p.id === profileSelect.value);
+            if (p) {
+                openProfileDialog(p);
+            }
+        });
+
+        deleteProfileButton.addEventListener('click', async () => {
+            const profileId = profileSelect.value;
+            const p = profiles.find(p => p.id === profileId);
+            if (!p || !confirm('Удалить профиль "' + p.name + '"?')) return;
+            try {
+                const response = await fetch('/api/profiles/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ profile_id: profileId })
+                });
+                if (!response.ok) {
+                    const data = await response.json();
+                    alert('Ошибка удаления: ' + (data.error || 'Неизвестная ошибка'));
+                    return;
+                }
+                profiles = await response.json();
+                profileSelect.value = '';
+                localStorage.removeItem('chat_profile_id');
+                renderProfileSelect();
+            } catch (err) {
+                alert('Ошибка сети: ' + err.message);
+            }
+        });
+
+        function openProfileDialog(p = null) {
+            profileForm.reset();
+            if (p) {
+                profileDialogTitle.textContent = 'Редактировать профиль';
+                profileIdInput.value = p.id;
+                profileNameInput.value = p.name;
+                profileDescriptionInput.value = p.description || '';
+            } else {
+                profileDialogTitle.textContent = 'Новый профиль';
+                profileIdInput.value = '';
+            }
+            profileDialog.classList.remove('hidden');
+        }
+
+        profileCancelButton.addEventListener('click', () => {
+            profileDialog.classList.add('hidden');
+        });
+
+        profileDialog.addEventListener('click', (e) => {
+            if (e.target === profileDialog) {
+                profileDialog.classList.add('hidden');
+            }
+        });
+
+        profileForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = profileNameInput.value.trim();
+            if (!name) {
+                alert('Имя профиля обязательно');
+                return;
+            }
+            const profileData = {
+                id: profileIdInput.value || undefined,
+                name: name,
+                description: profileDescriptionInput.value.trim()
+            };
+            try {
+                const response = await fetch('/api/profiles', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ profile: profileData })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    alert('Ошибка сохранения: ' + (data.error || 'Неизвестная ошибка'));
+                    return;
+                }
+                profiles = data.profiles;
+                profileDialog.classList.add('hidden');
+                renderProfileSelect();
+                profileSelect.value = data.profile_id;
+                localStorage.setItem('chat_profile_id', data.profile_id);
+                updateProfileActions();
+            } catch (err) {
                 alert('Ошибка сети: ' + err.message);
             }
         });

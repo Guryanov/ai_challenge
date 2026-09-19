@@ -2,6 +2,7 @@ package agent
 
 import (
 	"ai-chat/internal/memory"
+	"ai-chat/internal/profile"
 )
 
 // Config — настройки агента.
@@ -18,4 +19,5 @@ type Config struct {
 	Roles                    map[string]string
 	SummaryMaxTokens         int
 	MemoryStore              memory.Store
+	ProfileStore             profile.Store
 }

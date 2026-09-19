@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"ai-chat/internal/agent"
 	"ai-chat/internal/memory"
+	"ai-chat/internal/profile"
 )
 
 //go:embed static/index.html
@@ -43,6 +45,7 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			Role:            req.Role,
 			SessionID:       req.SessionID,
 			ProjectID:       req.ProjectID,
+			ProfileID:       req.ProfileID,
 			ContextStrategy: agent.ContextStrategy(req.ContextStrategy),
 			Facts:           req.Facts,
 			BranchAction:    req.BranchAction,
@@ -70,6 +73,7 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			Branches:           result.Branches,
 			Facts:              result.Facts,
 			ProjectID:          result.ProjectID,
+			ProfileID:          result.ProfileID,
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -301,6 +305,112 @@ func handleDeleteMemory(store memory.Store) http.HandlerFunc {
 
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(mem); err != nil {
+			log.Printf("Ошибка кодирования ответа: %v", err)
+		}
+	}
+}
+
+func handleListProfiles(store profile.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		profiles, err := store.List()
+		if err != nil {
+			log.Printf("Ошибка загрузки профилей: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(profiles); err != nil {
+			log.Printf("Ошибка кодирования ответа: %v", err)
+		}
+	}
+}
+
+func handleUpsertProfile(store profile.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		var req struct {
+			Profile profile.Profile `json:"profile"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
+			return
+		}
+		defer r.Body.Close()
+
+		if strings.TrimSpace(req.Profile.Name) == "" {
+			writeError(w, http.StatusBadRequest, "Имя профиля не может быть пустым")
+			return
+		}
+
+		profileID := req.Profile.ID
+		if profileID == "" {
+			profileID = profile.GenerateProfileID(req.Profile.Name)
+		}
+		if err := profile.ValidateProfileID(profileID); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		if err := store.Save(profileID, req.Profile); err != nil {
+			log.Printf("Ошибка сохранения профиля: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		profiles, err := store.List()
+		if err != nil {
+			log.Printf("Ошибка загрузки профилей: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"profile_id": profileID,
+			"profiles":   profiles,
+		}); err != nil {
+			log.Printf("Ошибка кодирования ответа: %v", err)
+		}
+	}
+}
+
+func handleDeleteProfile(store profile.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		var req struct {
+			ProfileID string `json:"profile_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
+			return
+		}
+		defer r.Body.Close()
+
+		if req.ProfileID == "" {
+			writeError(w, http.StatusBadRequest, "profile_id обязателен")
+			return
+		}
+
+		if err := store.Delete(req.ProfileID); err != nil {
+			log.Printf("Ошибка удаления профиля: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		profiles, err := store.List()
+		if err != nil {
+			log.Printf("Ошибка загрузки профилей: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(profiles); err != nil {
 			log.Printf("Ошибка кодирования ответа: %v", err)
 		}
 	}

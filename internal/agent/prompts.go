@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"ai-chat/internal/history"
+	"ai-chat/internal/profile"
 )
 
 func buildSystemPrompt(cfg Config, role string) string {
@@ -20,12 +21,23 @@ func buildSystemPrompt(cfg Config, role string) string {
 	return strings.Join(parts, "\n\n")
 }
 
-func buildMessages(cfg Config, req AgentRequest, history []history.Message, projectContext string) []map[string]string {
+func formatUserProfileContext(p profile.Profile) string {
+	if strings.TrimSpace(p.Description) == "" {
+		return ""
+	}
+	return "Профиль пользователя:\n" + strings.TrimSpace(p.Description)
+}
+
+func buildMessages(cfg Config, req AgentRequest, history []history.Message, userProfileContext, projectContext string) []map[string]string {
 	var messages []map[string]string
 
 	systemContent := buildSystemPrompt(cfg, req.Role)
 	if systemContent != "" {
 		messages = append(messages, map[string]string{"role": "system", "content": systemContent})
+	}
+
+	if userProfileContext != "" {
+		messages = append(messages, map[string]string{"role": "system", "content": userProfileContext})
 	}
 
 	if projectContext != "" {

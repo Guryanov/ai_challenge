@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"ai-chat/internal/memory"
+	"ai-chat/internal/profile"
 )
 
 type mockAPIClient struct {
@@ -145,6 +146,22 @@ func TestSummarizeLongTermMemoryIfNeeded(t *testing.T) {
 	}
 	if summaryCount != 1 {
 		t.Fatalf("expected 1 summary entry, got %d", summaryCount)
+	}
+}
+
+func TestFormatUserProfileContext(t *testing.T) {
+	p := profile.Profile{Name: "Разработчик", Description: "Люблю Go и чистую архитектуру."}
+	ctx := formatUserProfileContext(p)
+	if !strings.Contains(ctx, "Профиль пользователя:") {
+		t.Fatalf("expected profile header, got %q", ctx)
+	}
+	if !strings.Contains(ctx, "Люблю Go") {
+		t.Fatalf("expected description content, got %q", ctx)
+	}
+
+	empty := formatUserProfileContext(profile.Profile{Name: "Empty"})
+	if empty != "" {
+		t.Fatalf("expected empty context for empty description, got %q", empty)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"ai-chat/internal/history"
 	"ai-chat/internal/memory"
+	"ai-chat/internal/profile"
 )
 
 // SimpleAgent — базовая реализация LLM-агента.
@@ -20,15 +21,17 @@ type SimpleAgent struct {
 	client  APIClient
 	history history.Store
 	memory  memory.Store
+	profile profile.Store
 	tools   ToolRegistry
 }
 
 // NewSimpleAgent создаёт агента с переданным клиентом и конфигурацией.
 func NewSimpleAgent(cfg Config, client APIClient) *SimpleAgent {
 	return &SimpleAgent{
-		config: cfg,
-		client: client,
-		memory: cfg.MemoryStore,
+		config:  cfg,
+		client:  client,
+		memory:  cfg.MemoryStore,
+		profile: cfg.ProfileStore,
 	}
 }
 
@@ -41,6 +44,12 @@ func (a *SimpleAgent) WithHistory(h history.Store) *SimpleAgent {
 // WithMemory добавляет хранилище памяти проекта.
 func (a *SimpleAgent) WithMemory(m memory.Store) *SimpleAgent {
 	a.memory = m
+	return a
+}
+
+// WithProfile добавляет хранилище профилей пользователей.
+func (a *SimpleAgent) WithProfile(p profile.Store) *SimpleAgent {
+	a.profile = p
 	return a
 }
 
@@ -131,6 +140,16 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	}
 	session.TotalTokens += ctxResult.summaryTokens
 
+	// Загружаем профиль пользователя, если задан profile_id.
+	var userProfileContext string
+	if req.ProfileID != "" && a.profile != nil {
+		p, err := a.profile.Load(req.ProfileID)
+		if err != nil {
+			return AgentResponse{}, err
+		}
+		userProfileContext = formatUserProfileContext(p)
+	}
+
 	// Загружаем память проекта, если задан project_id.
 	var projectContext string
 	if req.ProjectID != "" && a.memory != nil {
@@ -151,7 +170,7 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 		messages = append([]history.Message{{Role: "system", Content: formatFacts(session.Facts)}}, messages...)
 	}
 
-	payload, err := buildPayload(a.config, req, messages, projectContext)
+	payload, err := buildPayload(a.config, req, messages, userProfileContext, projectContext)
 	if err != nil {
 		return AgentResponse{}, err
 	}
@@ -177,6 +196,7 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	resp.Branches = branchNames(session.Branches)
 	resp.Facts = session.Facts
 	resp.ProjectID = req.ProjectID
+	resp.ProfileID = req.ProfileID
 
 	return resp, nil
 }
