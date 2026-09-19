@@ -314,6 +314,97 @@ func handleDeleteMemory(store memory.Store) http.HandlerFunc {
 	}
 }
 
+func handleListInvariants(store memory.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		projectID := r.URL.Query().Get("project_id")
+		if projectID == "" {
+			writeError(w, http.StatusBadRequest, "project_id обязателен")
+			return
+		}
+
+		invariants, err := memory.LoadInvariants(store, projectID)
+		if err != nil {
+			log.Printf("Ошибка загрузки инвариантов: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(invariantsResponse{Invariants: invariants}); err != nil {
+			log.Printf("Ошибка кодирования ответа: %v", err)
+		}
+	}
+}
+
+func handleSaveInvariants(store memory.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		var req invariantsRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
+			return
+		}
+		defer r.Body.Close()
+
+		if req.ProjectID == "" {
+			writeError(w, http.StatusBadRequest, "project_id обязателен")
+			return
+		}
+
+		if err := memory.SaveInvariants(store, req.ProjectID, req.Invariants); err != nil {
+			log.Printf("Ошибка сохранения инвариантов: %v", err)
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		invariants, err := memory.LoadInvariants(store, req.ProjectID)
+		if err != nil {
+			log.Printf("Ошибка загрузки инвариантов после сохранения: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(invariantsResponse{Invariants: invariants}); err != nil {
+			log.Printf("Ошибка кодирования ответа: %v", err)
+		}
+	}
+}
+
+func handleDeleteInvariants(store memory.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		var req struct {
+			ProjectID string `json:"project_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
+			return
+		}
+		defer r.Body.Close()
+
+		if req.ProjectID == "" {
+			writeError(w, http.StatusBadRequest, "project_id обязателен")
+			return
+		}
+
+		if err := memory.DeleteInvariants(store, req.ProjectID); err != nil {
+			log.Printf("Ошибка удаления инвариантов: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(invariantsResponse{Invariants: []memory.Invariant{}}); err != nil {
+			log.Printf("Ошибка кодирования ответа: %v", err)
+		}
+	}
+}
+
 func handleListProfiles(store profile.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")

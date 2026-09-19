@@ -293,7 +293,7 @@ func (s *FileStore) unlock(projectID string) {
 // isLongTerm возвращает true, если тип записи относится к долгосрочной памяти.
 func isLongTerm(entryType string) bool {
 	switch entryType {
-	case "technology", "pattern", "principle", "knowledge", "summary":
+	case "technology", "pattern", "principle", "knowledge", "summary", InvariantsEntryType:
 		return true
 	}
 	return false

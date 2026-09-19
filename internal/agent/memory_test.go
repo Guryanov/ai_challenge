@@ -189,3 +189,58 @@ func TestSummarizeMemoryIfNeededNoThreshold(t *testing.T) {
 		t.Fatalf("expected 1 entry, got %d", len(result.LongTerm))
 	}
 }
+
+func TestSummarizeLongTermMemoryPreservesInvariants(t *testing.T) {
+	now := time.Now().UTC()
+	mem := memory.Memory{}
+	for i := 0; i < 22; i++ {
+		mem.LongTerm = append(mem.LongTerm, memory.Entry{
+			ID:        string(rune('a' + i)),
+			Type:      "knowledge",
+			Title:     "Fact",
+			Content:   "Content",
+			CreatedAt: now.Add(time.Duration(i) * time.Hour),
+		})
+	}
+	// Добавляем инварианты как самую старую запись.
+	mem.LongTerm = append([]memory.Entry{{
+		ID:        "inv",
+		Type:      memory.InvariantsEntryType,
+		Title:     "Инварианты проекта",
+		Content:   "invariants:\n  - title: X\n    category: stack\n    severity: hard\n    active: true\n",
+		CreatedAt: now.Add(-time.Hour),
+	}}, mem.LongTerm...)
+
+	tmp := t.TempDir()
+	store, err := memory.NewFileStore(tmp)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	client := &mockAPIClient{response: "Обобщённые знания проекта"}
+	cfg := Config{APIFormat: "openai", Model: "test", SummaryMaxTokens: 500}
+	agent := NewSimpleAgent(cfg, client).WithMemory(store)
+
+	result, err := agent.summarizeLongTermMemoryIfNeeded("proj", mem)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Инварианты должны остаться, при этом появиться summary.
+	hasInvariants := false
+	hasSummary := false
+	for _, e := range result.LongTerm {
+		if e.Type == memory.InvariantsEntryType {
+			hasInvariants = true
+		}
+		if e.Type == "summary" {
+			hasSummary = true
+		}
+	}
+	if !hasInvariants {
+		t.Fatal("expected invariants entry to be preserved")
+	}
+	if !hasSummary {
+		t.Fatal("expected summary entry")
+	}
+}

@@ -28,7 +28,7 @@ func formatUserProfileContext(p profile.Profile) string {
 	return "Профиль пользователя:\n" + strings.TrimSpace(p.Description)
 }
 
-func buildMessages(cfg Config, req AgentRequest, history []history.Message, userProfileContext, projectContext string) []map[string]string {
+func buildMessages(cfg Config, req AgentRequest, history []history.Message, userProfileContext, projectContext, invariantContext string) []map[string]string {
 	var messages []map[string]string
 
 	systemContent := buildSystemPrompt(cfg, req.Role)
@@ -38,6 +38,10 @@ func buildMessages(cfg Config, req AgentRequest, history []history.Message, user
 
 	if userProfileContext != "" {
 		messages = append(messages, map[string]string{"role": "system", "content": userProfileContext})
+	}
+
+	if invariantContext != "" {
+		messages = append(messages, map[string]string{"role": "system", "content": invariantContext})
 	}
 
 	if projectContext != "" {

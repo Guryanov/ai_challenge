@@ -1,6 +1,9 @@
 package main
 
-import "ai-chat/internal/history"
+import (
+	"ai-chat/internal/history"
+	"ai-chat/internal/memory"
+)
 
 // chatRequest — входящий HTTP-запрос от фронтенда.
 type chatRequest struct {
@@ -39,4 +42,15 @@ type chatResponse struct {
 	TaskStatus         string              `json:"task_status,omitempty"`
 	TaskContext        history.TaskContext `json:"task_context,omitempty"`
 	Error              string              `json:"error,omitempty"`
+}
+
+// invariantsRequest — запрос на сохранение инвариантов проекта.
+type invariantsRequest struct {
+	ProjectID  string             `json:"project_id"`
+	Invariants []memory.Invariant `json:"invariants"`
+}
+
+// invariantsResponse — ответ со списком инвариантов проекта.
+type invariantsResponse struct {
+	Invariants []memory.Invariant `json:"invariants"`
 }

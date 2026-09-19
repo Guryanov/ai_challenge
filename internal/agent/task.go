@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"ai-chat/internal/history"
+	"ai-chat/internal/memory"
 )
 
 // Стадии конечного автомата задачи.
@@ -89,7 +90,7 @@ func applyTaskAction(session *history.Session, action, rejectionReason string) e
 }
 
 // buildTaskStagePrompt формирует промпт для текущего этапа задачи.
-func buildTaskStagePrompt(session history.Session, projectContext, userProfileContext string) string {
+func buildTaskStagePrompt(session history.Session, projectContext, userProfileContext string, invariants []memory.Invariant) string {
 	ctx := session.TaskContext
 	stage := session.TaskStage
 	rejected := session.TaskStatus == TaskStatusRejected
@@ -127,12 +128,19 @@ func buildTaskStagePrompt(session history.Session, projectContext, userProfileCo
 
 	switch stage {
 	case TaskStagePlanning:
-		b.WriteString("Составь подробный план решения задачи. Перечисли шаги и укажи, какие технологии/паттерны использовать. Ответь одним сплошным текстом.")
+		b.WriteString("Составь подробный план решения задачи. Перечисли шаги и укажи, какие технологии/паттерны использовать. " +
+			"Перед каждым шагом проверь его на соответствие инвариантам проекта. Ответь одним сплошным текстом.")
 	case TaskStageExecution:
-		b.WriteString("Выполни утверждённый план. Предоставь конкретный результат: код, текст, инструкции или другое решение в зависимости от задачи.")
+		b.WriteString("Выполни утверждённый план. Предоставь конкретный результат: код, текст, инструкции или другое решение в зависимости от задачи. " +
+			"Учитывай инварианты проекта; если решение нарушает hard-инвариант, откажись от него и объясни причину.")
 	case TaskStageVerification:
-		b.WriteString("Проверь результат выполнения на соответствие правилам, технологиям и принципам проекта, а также профилю пользователя. " +
-			"Если есть нарушения, опиши их в начале ответа как 'Проблема: ...'. Если всё корректно, напиши 'Проверка пройдена' и краткое резюме.")
+		verificationBlock := formatInvariantVerificationBlock(invariants)
+		if verificationBlock != "" {
+			b.WriteString(verificationBlock)
+		} else {
+			b.WriteString("Проверь результат выполнения на соответствие правилам, технологиям и принципам проекта, а также профилю пользователя. " +
+				"Если есть нарушения, опиши их в начале ответа как 'Проблема: ...'. Если всё корректно, напиши 'Проверка пройдена' и краткое резюме.")
+		}
 	case TaskStageCompletion:
 		b.WriteString("Подготовь итоговое резюме выполненной задачи. Кратко опиши, что было сделано, и укажи ключевые результаты.")
 	}

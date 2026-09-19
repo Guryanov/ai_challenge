@@ -513,6 +513,60 @@
             font-size: 12px;
             resize: vertical;
         }
+        .invariants-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 240px;
+            overflow-y: auto;
+            margin-bottom: 8px;
+        }
+        .invariant-entry {
+            background-color: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 12px;
+        }
+        .invariant-entry.inactive {
+            opacity: 0.6;
+        }
+        .invariant-entry-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .invariant-entry-title {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .invariant-entry-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .invariant-entry-actions button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            color: #007bff;
+            padding: 0;
+        }
+        .invariant-entry-actions button.delete {
+            color: #dc3545;
+        }
+        .invariant-entry-meta {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        .invariant-entry-description {
+            color: #555;
+            word-wrap: break-word;
+        }
     </style>
 </head>
 <body>
@@ -564,6 +618,12 @@
             </div>
             <div id="memory-list" class="memory-list"></div>
             <button type="button" id="add-memory" class="memory-add-button">Добавить запись</button>
+        </div>
+
+        <div id="invariants-panel" class="tool-group hidden">
+            <label>Инварианты</label>
+            <div id="invariants-list" class="invariants-list"></div>
+            <button type="button" id="add-invariant" class="memory-add-button">Добавить инвариант</button>
         </div>
 
         <div class="tool-group">
@@ -681,6 +741,49 @@
         </div>
     </div>
 
+    <div id="invariants-dialog" class="dialog hidden">
+        <div class="dialog-content">
+            <h3 id="invariants-dialog-title">Инвариант</h3>
+            <form id="invariants-form">
+                <input type="hidden" id="invariant-index" value="">
+                <div class="form-group">
+                    <label for="invariant-title">Заголовок</label>
+                    <input type="text" id="invariant-title" required>
+                </div>
+                <div class="form-group">
+                    <label for="invariant-description">Описание</label>
+                    <textarea id="invariant-description" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="invariant-category">Категория</label>
+                    <select id="invariant-category" required>
+                        <option value="architecture">Архитектура</option>
+                        <option value="technical_decision">Техническое решение</option>
+                        <option value="stack">Стек</option>
+                        <option value="business_rule">Бизнес-правило</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="invariant-severity">Жёсткость</label>
+                    <select id="invariant-severity" required>
+                        <option value="hard">Hard — отказ при нарушении</option>
+                        <option value="soft">Soft — предупреждение</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="invariant-active" checked>
+                        Активен
+                    </label>
+                </div>
+                <div class="dialog-buttons">
+                    <button type="button" id="invariant-cancel" class="secondary">Отмена</button>
+                    <button type="submit" class="primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="profile-dialog" class="dialog hidden">
         <div class="dialog-content">
             <h3 id="profile-dialog-title">Профиль</h3>
@@ -739,6 +842,20 @@
         const memoryTagsInput = document.getElementById('memory-tags');
         const memoryCancelButton = document.getElementById('memory-cancel');
 
+        const invariantsPanel = document.getElementById('invariants-panel');
+        const invariantsList = document.getElementById('invariants-list');
+        const addInvariantButton = document.getElementById('add-invariant');
+        const invariantsDialog = document.getElementById('invariants-dialog');
+        const invariantsForm = document.getElementById('invariants-form');
+        const invariantsDialogTitle = document.getElementById('invariants-dialog-title');
+        const invariantIndexInput = document.getElementById('invariant-index');
+        const invariantTitleInput = document.getElementById('invariant-title');
+        const invariantDescriptionInput = document.getElementById('invariant-description');
+        const invariantCategoryInput = document.getElementById('invariant-category');
+        const invariantSeverityInput = document.getElementById('invariant-severity');
+        const invariantActiveInput = document.getElementById('invariant-active');
+        const invariantCancelButton = document.getElementById('invariant-cancel');
+
         const profileSelect = document.getElementById('profile-select');
         const createProfileButton = document.getElementById('create-profile');
         const editProfileButton = document.getElementById('edit-profile');
@@ -773,6 +890,7 @@
 
         let facts = {};
         let memoryState = { long_term: [], working: [] };
+        let invariantsState = [];
         let activeMemoryTab = 'long_term';
         let profiles = [];
         let taskState = { stage: '', status: '', context: {} };
@@ -794,6 +912,7 @@
             loadMemory(savedProjectId);
         }
         updateMemoryPanel();
+        updateInvariantsPanel();
 
         let projectIdDebounceTimer = null;
 
@@ -804,6 +923,7 @@
             if (newProjectId && !isValidProjectId(newProjectId)) {
                 projectIdInput.value = oldProjectId;
                 updateMemoryPanel();
+                updateInvariantsPanel();
                 return;
             }
 
@@ -822,7 +942,9 @@
             }
 
             memoryState = { long_term: [], working: [] };
+            invariantsState = [];
             updateMemoryPanel();
+            updateInvariantsPanel();
             if (newProjectId) {
                 await loadMemory(newProjectId);
             }
@@ -1323,10 +1445,29 @@
                 }
                 memoryState = data;
                 renderMemoryList();
+                await loadInvariants(projectId);
             } catch (err) {
                 console.error('Ошибка загрузки памяти:', err);
                 memoryList.innerHTML = '<div class="empty-state" style="margin-top:0;font-size:12px;color:#c53030;">Ошибка сети: ' + escapeHtml(err.message) + '</div>';
             }
+        }
+
+        async function loadInvariants(projectId) {
+            if (!projectId) return;
+            try {
+                const response = await fetch('/api/invariants?project_id=' + encodeURIComponent(projectId));
+                const data = await response.json();
+                if (!response.ok) {
+                    console.error('Ошибка загрузки инвариантов:', data.error);
+                    invariantsState = [];
+                } else {
+                    invariantsState = data.invariants || [];
+                }
+            } catch (err) {
+                console.error('Ошибка загрузки инвариантов:', err);
+                invariantsState = [];
+            }
+            renderInvariants();
         }
 
         function updateMemoryPanel() {
@@ -1338,8 +1479,20 @@
             }
         }
 
+        function updateInvariantsPanel() {
+            const hasProject = projectIdInput.value.trim() !== '';
+            invariantsPanel.classList.toggle('hidden', !hasProject);
+            if (hasProject) {
+                renderInvariants();
+            }
+        }
+
+        function countVisibleLongTerm() {
+            return ((memoryState.long_term || []).filter(e => e.type !== 'invariants_list')).length;
+        }
+
         function updateMemoryCounters() {
-            document.getElementById('count-long_term').textContent = '(' + (memoryState.long_term || []).length + ')';
+            document.getElementById('count-long_term').textContent = '(' + countVisibleLongTerm() + ')';
             document.getElementById('count-working').textContent = '(' + (memoryState.working || []).length + ')';
         }
 
@@ -1351,7 +1504,7 @@
 
         function renderMemoryList() {
             updateMemoryCounters();
-            const entries = memoryState[activeMemoryTab] || [];
+            const entries = (memoryState[activeMemoryTab] || []).filter(e => e.type !== 'invariants_list');
             memoryList.innerHTML = '';
             if (entries.length === 0) {
                 memoryList.innerHTML = '<div class="empty-state" style="margin-top:0;font-size:12px;">Нет записей</div>';
@@ -1378,6 +1531,85 @@
                 el.querySelector('button:not(.delete)').addEventListener('click', () => editMemoryEntry(entry.id));
                 el.querySelector('button.delete').addEventListener('click', () => deleteMemoryEntry(entry.id));
                 memoryList.appendChild(el);
+            }
+        }
+
+        function renderInvariants() {
+            invariantsList.innerHTML = '';
+            if (invariantsState.length === 0) {
+                invariantsList.innerHTML = '<div class="empty-state" style="margin-top:0;font-size:12px;">Нет инвариантов</div>';
+                return;
+            }
+            const categoryNames = {
+                architecture: 'Архитектура',
+                technical_decision: 'Тех. решение',
+                stack: 'Стек',
+                business_rule: 'Бизнес-правило'
+            };
+            invariantsState.forEach((inv, index) => {
+                const el = document.createElement('div');
+                el.className = 'invariant-entry' + (inv.active ? '' : ' inactive');
+                el.innerHTML = `
+                    <div class="invariant-entry-header">
+                        <span class="invariant-entry-title">${escapeHtml(inv.title)}</span>
+                        <div class="invariant-entry-actions">
+                            <button type="button" data-index="${index}">✎</button>
+                            <button type="button" class="delete" data-index="${index}">×</button>
+                        </div>
+                    </div>
+                    <div class="invariant-entry-meta">[${escapeHtml(inv.severity)}] ${escapeHtml(categoryNames[inv.category] || inv.category)}${inv.active ? '' : ' • неактивен'}</div>
+                    ${inv.description ? `<div class="invariant-entry-description">${escapeHtml(inv.description)}</div>` : ''}
+                `;
+                el.querySelector('button:not(.delete)').addEventListener('click', () => openInvariantDialog(index));
+                el.querySelector('button.delete').addEventListener('click', () => deleteInvariant(index));
+                invariantsList.appendChild(el);
+            });
+        }
+
+        function openInvariantDialog(index = null) {
+            invariantsForm.reset();
+            invariantIndexInput.value = index !== null ? index : '';
+            if (index !== null && invariantsState[index]) {
+                const inv = invariantsState[index];
+                invariantsDialogTitle.textContent = 'Редактировать инвариант';
+                invariantTitleInput.value = inv.title || '';
+                invariantDescriptionInput.value = inv.description || '';
+                invariantCategoryInput.value = inv.category || 'architecture';
+                invariantSeverityInput.value = inv.severity || 'hard';
+                invariantActiveInput.checked = inv.active !== false;
+            } else {
+                invariantsDialogTitle.textContent = 'Новый инвариант';
+                invariantActiveInput.checked = true;
+            }
+            invariantsDialog.classList.remove('hidden');
+        }
+
+        async function deleteInvariant(index) {
+            if (!confirm('Удалить инвариант?')) return;
+            const newInvariants = invariantsState.slice();
+            newInvariants.splice(index, 1);
+            await saveInvariants(newInvariants);
+        }
+
+        async function saveInvariants(newInvariants) {
+            const projectId = projectIdInput.value.trim();
+            if (!projectId) return;
+            try {
+                const response = await fetch('/api/invariants', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: projectId, invariants: newInvariants })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    alert('Ошибка сохранения инвариантов: ' + (data.error || 'Неизвестная ошибка'));
+                    return;
+                }
+                invariantsState = data.invariants || [];
+                renderInvariants();
+                await loadMemory(projectId);
+            } catch (err) {
+                alert('Ошибка сети: ' + err.message);
             }
         }
 
@@ -1466,6 +1698,49 @@
             if (e.target === memoryDialog) {
                 memoryDialog.classList.add('hidden');
             }
+        });
+
+        addInvariantButton.addEventListener('click', () => {
+            openInvariantDialog();
+        });
+
+        invariantCancelButton.addEventListener('click', () => {
+            invariantsDialog.classList.add('hidden');
+        });
+
+        invariantsDialog.addEventListener('click', (e) => {
+            if (e.target === invariantsDialog) {
+                invariantsDialog.classList.add('hidden');
+            }
+        });
+
+        invariantsForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const indexValue = invariantIndexInput.value;
+            const index = indexValue === '' ? -1 : parseInt(indexValue, 10);
+
+            const invariant = {
+                title: invariantTitleInput.value.trim(),
+                description: invariantDescriptionInput.value.trim(),
+                category: invariantCategoryInput.value,
+                severity: invariantSeverityInput.value,
+                active: invariantActiveInput.checked
+            };
+
+            if (!invariant.title) {
+                alert('Заголовок инварианта обязателен');
+                return;
+            }
+
+            const newInvariants = invariantsState.slice();
+            if (index >= 0 && index < newInvariants.length) {
+                newInvariants[index] = invariant;
+            } else {
+                newInvariants.push(invariant);
+            }
+
+            invariantsDialog.classList.add('hidden');
+            await saveInvariants(newInvariants);
         });
 
         memoryForm.addEventListener('submit', async (e) => {

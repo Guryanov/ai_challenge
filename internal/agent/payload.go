@@ -23,7 +23,7 @@ type responseFormat struct {
 	Type string `json:"type"`
 }
 
-func buildPayload(cfg Config, req AgentRequest, history []history.Message, userProfileContext, projectContext string) ([]byte, error) {
+func buildPayload(cfg Config, req AgentRequest, history []history.Message, userProfileContext, projectContext, invariantContext string) ([]byte, error) {
 	switch cfg.APIFormat {
 	case "openai":
 		var rf *responseFormat
@@ -33,7 +33,7 @@ func buildPayload(cfg Config, req AgentRequest, history []history.Message, userP
 
 		return json.Marshal(openaiPayload{
 			Model:          cfg.Model,
-			Messages:       buildMessages(cfg, req, history, userProfileContext, projectContext),
+			Messages:       buildMessages(cfg, req, history, userProfileContext, projectContext, invariantContext),
 			ResponseFormat: rf,
 			Temperature:    req.Temperature,
 			MaxTokens:      req.MaxTokens,
@@ -51,6 +51,9 @@ func buildPayload(cfg Config, req AgentRequest, history []history.Message, userP
 		}
 		if userProfileContext != "" {
 			userContent = userProfileContext + "\n\n" + userContent
+		}
+		if invariantContext != "" {
+			userContent = invariantContext + "\n\n" + userContent
 		}
 		if projectContext != "" {
 			userContent = projectContext + "\n\n" + userContent
