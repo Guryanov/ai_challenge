@@ -13,6 +13,7 @@ type chatRequest struct {
 	ContextStrategy string            `json:"context_strategy"`
 	Facts           map[string]string `json:"facts"`
 	BranchAction    string            `json:"branch_action"`
+	WorkflowMode    string            `json:"workflow_mode"`
 	Temperature     *float64          `json:"temperature"`
 	MaxTokens       *int              `json:"max_tokens"`
 	StopSequence    string            `json:"stop_sequence"`

@@ -45,6 +45,7 @@ type Session struct {
 	Facts        map[string]string `json:"facts"`
 	Branches     map[string]Branch `json:"branches"`
 	ActiveBranch string            `json:"active_branch"`
+	WorkflowMode string            `json:"workflow_mode,omitempty"`
 	TaskStage    string            `json:"task_stage,omitempty"`
 	TaskStatus   string            `json:"task_status,omitempty"`
 	TaskContext  TaskContext       `json:"task_context,omitempty"`

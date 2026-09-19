@@ -531,6 +531,14 @@
             </div>
         </div>
 
+        <div class="tool-group">
+            <label for="workflow-mode">Режим обработки</label>
+            <select id="workflow-mode">
+                <option value="chat">Chat — прямой ответ</option>
+                <option value="workflow">Workflow — этапы задачи</option>
+            </select>
+        </div>
+
         <div id="task-panel" class="tool-group hidden">
             <label>Задание</label>
             <div id="task-state" class="task-state">Нет активного задания</div>
@@ -743,6 +751,7 @@
         const profileDescriptionInput = document.getElementById('profile-description');
         const profileCancelButton = document.getElementById('profile-cancel');
 
+        const workflowMode = document.getElementById('workflow-mode');
         const taskPanel = document.getElementById('task-panel');
         const taskStateLabel = document.getElementById('task-state');
         const taskStageElements = document.querySelectorAll('.task-stage');
@@ -841,6 +850,12 @@
         }
         updateStrategyUI();
 
+        // Восстанавливаем режим обработки.
+        const savedWorkflowMode = localStorage.getItem('workflow_mode');
+        if (savedWorkflowMode) {
+            workflowMode.value = savedWorkflowMode;
+        }
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             if (taskState.status === 'pending') {
@@ -872,6 +887,7 @@
                 profile_id: profileSelect.value,
                 context_strategy: contextStrategy.value,
                 facts: facts,
+                workflow_mode: workflowMode.value,
                 temperature: parseFloat(temperature.value) || null,
                 max_tokens: parseInt(maxTokens.value, 10) || null,
                 stop_sequence: stopSequence.value.trim() || null
@@ -1059,6 +1075,24 @@
                 if (response.ok) updateStateFromResponse(data);
             } catch (err) {
                 console.error('Ошибка смены стратегии:', err);
+            }
+        });
+
+        workflowMode.addEventListener('change', async () => {
+            localStorage.setItem('workflow_mode', workflowMode.value);
+            if (workflowMode.value === 'chat' && taskState.stage) {
+                // Очищаем состояние задачи на сервере при переходе в chat.
+                try {
+                    await fetch('/api/task/cancel', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ session_id: sessionId })
+                    });
+                } catch (err) {
+                    console.error('Ошибка отмены задачи при смене режима:', err);
+                }
+                taskState = { stage: '', status: '', context: {} };
+                renderTaskPanel();
             }
         });
 

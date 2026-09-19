@@ -138,18 +138,30 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 		return AgentResponse{}, err
 	}
 
+	// Обновляем режим обработки, если пользователь его явно передал.
+	if req.WorkflowMode != "" {
+		session.WorkflowMode = req.WorkflowMode
+	}
+	workflowMode := effectiveWorkflowMode(session)
+
 	// Определяем состояние конечного автомата задачи.
 	originalUserMessage := req.Message
 	switch {
-	case originalUserMessage != "":
+	case originalUserMessage != "" && workflowMode == WorkflowModeWorkflow:
 		// Новый запрос пользователя сбрасывает текущее задание и начинает планирование.
 		resetTaskState(&session, originalUserMessage)
+	case originalUserMessage != "" && workflowMode == WorkflowModeChat:
+		// В режиме chat задачи не создаются, очищаем возможное состояние workflow.
+		clearTaskState(&session)
 	case req.TaskAction != "":
+		if workflowMode != WorkflowModeWorkflow {
+			return AgentResponse{}, fmt.Errorf("действия над задачами доступны только в режиме workflow")
+		}
 		// Утверждение или отклонение текущего этапа.
 		if err := applyTaskAction(&session, req.TaskAction, req.RejectionReason); err != nil {
 			return AgentResponse{}, err
 		}
-	case session.TaskStage != "" && session.TaskStatus == TaskStatusPending:
+	case session.TaskStage != "" && session.TaskStatus == TaskStatusPending && workflowMode == WorkflowModeWorkflow:
 		// Продолжаем текущий этап (например, после перезагрузки страницы).
 	default:
 		return AgentResponse{}, fmt.Errorf("сообщение не может быть пустым")
@@ -193,10 +205,13 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 		messages = append([]history.Message{{Role: "system", Content: formatFacts(session.Facts)}}, messages...)
 	}
 
-	// Формируем промпт текущего этапа задачи.
-	stagePrompt := buildTaskStagePrompt(session, projectContext, userProfileContext)
+	// Формируем сообщение для LLM: либо промпт этапа задачи, либо прямой запрос пользователя.
 	llmReq := req
-	llmReq.Message = stagePrompt
+	if workflowMode == WorkflowModeWorkflow {
+		llmReq.Message = buildTaskStagePrompt(session, projectContext, userProfileContext)
+	} else {
+		llmReq.Message = originalUserMessage
+	}
 
 	payload, err := buildPayload(a.config, llmReq, messages, userProfileContext, projectContext)
 	if err != nil {
@@ -213,9 +228,11 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	resp.Duration = time.Since(mainStart)
 	resp.Compressed = strategy == StrategySummary && len(session.Branches[session.ActiveBranch].Messages) > 2
 
-	// Сохраняем результат этапа в контексте задачи.
-	updateTaskContext(&session, resp.Content)
-	session.TaskStatus = TaskStatusPending
+	// В режиме workflow сохраняем результат этапа в контексте задачи.
+	if workflowMode == WorkflowModeWorkflow {
+		updateTaskContext(&session, resp.Content)
+		session.TaskStatus = TaskStatusPending
+	}
 
 	// Сохраняем новое сообщение пользователя и ответ ассистента.
 	sessionTotal, err := a.saveHistory(req.SessionID, &session, originalUserMessage, resp)
@@ -332,6 +349,13 @@ func (a *SimpleAgent) effectiveStrategy(session history.Session) ContextStrategy
 		return ContextStrategy(session.Strategy)
 	}
 	return StrategyFull
+}
+
+func effectiveWorkflowMode(session history.Session) string {
+	if session.WorkflowMode != "" {
+		return session.WorkflowMode
+	}
+	return WorkflowModeChat
 }
 
 func formatFacts(facts map[string]string) string {

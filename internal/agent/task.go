@@ -55,6 +55,13 @@ func resetTaskState(session *history.Session, originalRequest string) {
 	session.TaskContext = history.TaskContext{OriginalRequest: originalRequest}
 }
 
+// clearTaskState очищает состояние задачи (используется в режиме chat).
+func clearTaskState(session *history.Session) {
+	session.TaskStage = ""
+	session.TaskStatus = ""
+	session.TaskContext = history.TaskContext{}
+}
+
 // applyTaskAction применяет действие пользователя (утверждение/отклонение).
 func applyTaskAction(session *history.Session, action, rejectionReason string) error {
 	switch action {

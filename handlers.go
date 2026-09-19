@@ -49,6 +49,7 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			ContextStrategy: agent.ContextStrategy(req.ContextStrategy),
 			Facts:           req.Facts,
 			BranchAction:    req.BranchAction,
+			WorkflowMode:    req.WorkflowMode,
 			Temperature:     req.Temperature,
 			MaxTokens:       req.MaxTokens,
 			StopSequence:    req.StopSequence,

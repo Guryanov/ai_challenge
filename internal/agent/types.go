@@ -17,6 +17,12 @@ const (
 	StrategyBranching     ContextStrategy = "branching"
 )
 
+// Режимы обработки запроса.
+const (
+	WorkflowModeChat     = "chat"
+	WorkflowModeWorkflow = "workflow"
+)
+
 // AgentRequest — запрос к агенту.
 type AgentRequest struct {
 	Message         string
@@ -30,6 +36,7 @@ type AgentRequest struct {
 	BranchAction    string // create:<name> | switch:<name>
 	TaskAction      string // "approve" | "reject" | ""
 	RejectionReason string
+	WorkflowMode    string // "chat" | "workflow"
 	Temperature     *float64
 	MaxTokens       *int
 	StopSequence    string
