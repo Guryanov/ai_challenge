@@ -148,6 +148,28 @@ func buildTaskStagePrompt(session history.Session, projectContext, userProfileCo
 	return strings.TrimSpace(b.String())
 }
 
+// formatWorkflowContext формирует системное сообщение с правилами workflow.
+// Возвращает пустую строку, если сессия не находится в workflow.
+func formatWorkflowContext(session history.Session) string {
+	if session.TaskStage == "" {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("Ты работаешь в режиме многоэтапного workflow. Задача проходит строго 4 этапа:\n" +
+		"1. Планирование (planning) — составление плана решения.\n" +
+		"2. Выполнение (execution) — реализация утверждённого плана.\n" +
+		"3. Проверка (verification) — проверка результата на соответствие правилам, инвариантам и профилю пользователя.\n" +
+		"4. Завершение (completion) — итоговое резюме выполненной задачи.\n\n" +
+		"Правила:\n" +
+		"- Переход с текущего этапа на следующий возможен только после явного утверждения пользователя.\n" +
+		"- Не перескакивай через этапы и не выполняй работу следующего этапа раньше времени.\n" +
+		"- Если этап отклонён, переделай результат текущего этапа с учётом причины отклонения.\n\n")
+	b.WriteString(fmt.Sprintf("Текущий этап: %s (%s, статус: %s).", stageName(session.TaskStage), session.TaskStage, session.TaskStatus))
+
+	return strings.TrimSpace(b.String())
+}
+
 // stageName возвращает человекочитаемое название этапа.
 func stageName(stage string) string {
 	switch stage {

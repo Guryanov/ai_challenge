@@ -219,7 +219,12 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 		llmReq.Message = originalUserMessage
 	}
 
-	payload, err := buildPayload(a.config, llmReq, messages, userProfileContext, projectContext, invariantContext)
+	workflowContext := ""
+	if workflowMode == WorkflowModeWorkflow {
+		workflowContext = formatWorkflowContext(session)
+	}
+
+	payload, err := buildPayload(a.config, llmReq, messages, userProfileContext, projectContext, invariantContext, workflowContext)
 	if err != nil {
 		return AgentResponse{}, err
 	}

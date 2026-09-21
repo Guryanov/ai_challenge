@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"strings"
 	"testing"
 
 	"ai-chat/internal/history"
@@ -98,5 +99,42 @@ func TestUpdateTaskContext(t *testing.T) {
 	updateTaskContext(&session, "Execution content")
 	if session.TaskContext.ExecutionResult != "Execution content" {
 		t.Fatalf("expected execution content, got %q", session.TaskContext.ExecutionResult)
+	}
+}
+
+func TestFormatWorkflowContext(t *testing.T) {
+	session := history.Session{
+		TaskStage:  TaskStagePlanning,
+		TaskStatus: TaskStatusPending,
+	}
+
+	ctx := formatWorkflowContext(session)
+	if ctx == "" {
+		t.Fatal("expected non-empty workflow context")
+	}
+
+	expectedParts := []string{
+		"многоэтапного workflow",
+		"4 этапа",
+		"Планирование",
+		"Выполнение",
+		"Проверка",
+		"Завершение",
+		"Переход с текущего этапа на следующий возможен только после явного утверждения пользователя",
+		"Текущий этап: Планирование",
+		"(planning",
+		"pending",
+	}
+	for _, part := range expectedParts {
+		if !strings.Contains(ctx, part) {
+			t.Errorf("expected workflow context to contain %q, got:\n%s", part, ctx)
+		}
+	}
+}
+
+func TestFormatWorkflowContextEmptyOutsideWorkflow(t *testing.T) {
+	session := history.Session{}
+	if ctx := formatWorkflowContext(session); ctx != "" {
+		t.Fatalf("expected empty context outside workflow, got %q", ctx)
 	}
 }
