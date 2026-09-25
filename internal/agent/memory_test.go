@@ -30,9 +30,9 @@ func (m *mockAPIClient) Call(payload []byte) ([]byte, error) {
 			},
 		},
 		"usage": map[string]int{
-			"prompt_tokens":      10,
+			"prompt_tokens":     10,
 			"completion_tokens": 5,
-			"total_tokens":       15,
+			"total_tokens":      15,
 		},
 	})
 }

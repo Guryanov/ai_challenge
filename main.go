@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 
 	"ai-chat/internal/agent"
 	"ai-chat/internal/history"
+	"ai-chat/internal/mcp"
 	"ai-chat/internal/memory"
 	"ai-chat/internal/profile"
 )
@@ -35,13 +37,22 @@ func main() {
 		log.Fatalf("Ошибка создания хранилища профилей: %v", err)
 	}
 
+	mcpRegistry := mcp.NewRegistry(context.Background(), cfg.MCP)
+	defer func() {
+		if err := mcpRegistry.CloseAll(); err != nil {
+			log.Printf("Ошибка закрытия MCP-серверов: %v", err)
+		}
+	}()
+
 	llmAgent := agent.NewSimpleAgent(cfg.Agent, httpClient).
 		WithHistory(historyStore).
 		WithMemory(memoryStore).
-		WithProfile(profileStore)
+		WithProfile(profileStore).
+		WithTools(mcpRegistry)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", serveIndex)
+	mux.HandleFunc("GET /api/mcp/status", handleMCPStatus(mcpRegistry))
 	mux.HandleFunc("POST /api/chat", handleChat(llmAgent))
 	mux.HandleFunc("POST /api/chat/clear", handleClearHistory(llmAgent))
 	mux.HandleFunc("POST /api/session/facts", handleSessionFacts(llmAgent))

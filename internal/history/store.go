@@ -14,13 +14,25 @@ import (
 
 // Message — одно сообщение в истории диалога.
 type Message struct {
-	Role             string    `json:"role"`
-	Content          string    `json:"content"`
-	IsSummary        bool      `json:"is_summary,omitempty"`
-	PromptTokens     int       `json:"prompt_tokens,omitempty"`
-	CompletionTokens int       `json:"completion_tokens,omitempty"`
-	TotalTokens      int       `json:"total_tokens,omitempty"`
-	Timestamp        time.Time `json:"timestamp,omitempty"`
+	Role             string     `json:"role"`
+	Content          string     `json:"content"`
+	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID       string     `json:"tool_call_id,omitempty"`
+	IsSummary        bool       `json:"is_summary,omitempty"`
+	PromptTokens     int        `json:"prompt_tokens,omitempty"`
+	CompletionTokens int        `json:"completion_tokens,omitempty"`
+	TotalTokens      int        `json:"total_tokens,omitempty"`
+	Timestamp        time.Time  `json:"timestamp,omitempty"`
+}
+
+// ToolCall описывает вызов инструмента внутри сообщения assistant.
+type ToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
 }
 
 // Branch — независимая ветка диалога внутри сессии.

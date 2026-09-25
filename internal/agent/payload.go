@@ -10,20 +10,32 @@ import (
 )
 
 type openaiPayload struct {
-	Model          string              `json:"model"`
-	Messages       []map[string]string `json:"messages"`
-	ResponseFormat *responseFormat     `json:"response_format,omitempty"`
-	Temperature    *float64            `json:"temperature,omitempty"`
-	MaxTokens      *int                `json:"max_tokens,omitempty"`
-	Stop           string              `json:"stop,omitempty"`
-	Args           []string            `json:"args,omitempty"`
+	Model          string           `json:"model"`
+	Messages       []map[string]any `json:"messages"`
+	Tools          []toolDef        `json:"tools,omitempty"`
+	ResponseFormat *responseFormat  `json:"response_format,omitempty"`
+	Temperature    *float64         `json:"temperature,omitempty"`
+	MaxTokens      *int             `json:"max_tokens,omitempty"`
+	Stop           string           `json:"stop,omitempty"`
+	Args           []string         `json:"args,omitempty"`
 }
 
 type responseFormat struct {
 	Type string `json:"type"`
 }
 
-func buildPayload(cfg Config, req AgentRequest, history []history.Message, userProfileContext, projectContext, invariantContext, workflowContext string) ([]byte, error) {
+type toolDef struct {
+	Type     string          `json:"type"`
+	Function toolFunctionDef `json:"function"`
+}
+
+type toolFunctionDef struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Parameters  map[string]any `json:"parameters,omitempty"`
+}
+
+func buildPayload(cfg Config, req AgentRequest, history []history.Message, tools ToolRegistry, userProfileContext, projectContext, invariantContext, workflowContext string) ([]byte, error) {
 	switch cfg.APIFormat {
 	case "openai":
 		var rf *responseFormat
@@ -31,7 +43,7 @@ func buildPayload(cfg Config, req AgentRequest, history []history.Message, userP
 			rf = &responseFormat{Type: "json_object"}
 		}
 
-		return json.Marshal(openaiPayload{
+		payload := openaiPayload{
 			Model:          cfg.Model,
 			Messages:       buildMessages(cfg, req, history, userProfileContext, projectContext, invariantContext, workflowContext),
 			ResponseFormat: rf,
@@ -39,7 +51,13 @@ func buildPayload(cfg Config, req AgentRequest, history []history.Message, userP
 			MaxTokens:      req.MaxTokens,
 			Stop:           req.StopSequence,
 			Args:           []string{"-y", "@orchestrator-agent"},
-		})
+		}
+
+		if tools != nil {
+			payload.Tools = toOpenAITools(tools.Definitions())
+		}
+
+		return json.Marshal(payload)
 	default:
 		userContent := req.Message
 		if cfg.UserPromptTemplate != "" {
@@ -76,7 +94,7 @@ func buildSummaryPayload(cfg Config, messages []history.Message) ([]byte, error)
 	case "openai":
 		return json.Marshal(openaiPayload{
 			Model: cfg.Model,
-			Messages: []map[string]string{
+			Messages: []map[string]any{
 				{"role": "system", "content": summarySystemPrompt},
 				{"role": "user", "content": conversation},
 			},
@@ -105,7 +123,7 @@ func buildMemorySummaryPayload(cfg Config, entries []memory.Entry) ([]byte, erro
 	case "openai":
 		return json.Marshal(openaiPayload{
 			Model: cfg.Model,
-			Messages: []map[string]string{
+			Messages: []map[string]any{
 				{"role": "system", "content": "Ты помощник по обобщению знаний проекта."},
 				{"role": "user", "content": strings.TrimSpace(b.String())},
 			},
@@ -118,6 +136,25 @@ func buildMemorySummaryPayload(cfg Config, entries []memory.Entry) ([]byte, erro
 			"message": "Ты помощник по обобщению знаний проекта.\n\n" + strings.TrimSpace(b.String()),
 		})
 	}
+}
+
+func toOpenAITools(defs []ToolDefinition) []toolDef {
+	if len(defs) == 0 {
+		return nil
+	}
+
+	tools := make([]toolDef, 0, len(defs))
+	for _, d := range defs {
+		tools = append(tools, toolDef{
+			Type: "function",
+			Function: toolFunctionDef{
+				Name:        d.Name,
+				Description: d.Description,
+				Parameters:  d.Parameters,
+			},
+		})
+	}
+	return tools
 }
 
 func ptrFloat64(v float64) *float64 { return &v }

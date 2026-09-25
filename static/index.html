@@ -567,6 +567,106 @@
             color: #555;
             word-wrap: break-word;
         }
+        .mcp-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .mcp-header h2 {
+            margin: 0;
+        }
+        .mcp-refresh {
+            padding: 6px 10px;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .mcp-refresh:hover {
+            background-color: #e0e0e0;
+        }
+        .mcp-refresh:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .mcp-server {
+            background-color: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+        .mcp-server-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .mcp-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .mcp-status.connected {
+            background-color: #28a745;
+        }
+        .mcp-status.disconnected {
+            background-color: #dc3545;
+        }
+        .mcp-status.disabled {
+            background-color: #888;
+        }
+        .mcp-server-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .mcp-server-error {
+            color: #dc3545;
+            margin-top: 4px;
+            font-size: 11px;
+        }
+        .mcp-tools-toggle {
+            margin-top: 6px;
+            background: none;
+            border: none;
+            color: #007bff;
+            cursor: pointer;
+            font-size: 11px;
+            padding: 0;
+        }
+        .mcp-tools {
+            margin-top: 6px;
+            padding-left: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .mcp-tool {
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 8px;
+        }
+        .mcp-tool-name {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 12px;
+        }
+        .mcp-tool-description {
+            color: #555;
+            font-size: 11px;
+            margin-top: 2px;
+        }
+        .mcp-empty {
+            color: #888;
+            font-size: 12px;
+            text-align: center;
+            padding: 12px 0;
+        }
     </style>
 </head>
 <body>
@@ -691,6 +791,14 @@
 
         <div class="tool-group">
             <button type="button" id="clear-history">Очистить историю</button>
+        </div>
+
+        <div id="mcp-panel" class="tool-group">
+            <div class="mcp-header">
+                <h2>MCP серверы</h2>
+                <button type="button" id="mcp-refresh" class="mcp-refresh">Обновить</button>
+            </div>
+            <div id="mcp-status">Загрузка...</div>
         </div>
     </aside>
 
@@ -865,6 +973,9 @@
         const profileDialogTitle = document.getElementById('profile-dialog-title');
         const profileIdInput = document.getElementById('profile-id');
         const profileNameInput = document.getElementById('profile-name');
+
+        const mcpStatusContainer = document.getElementById('mcp-status');
+        const mcpRefreshButton = document.getElementById('mcp-refresh');
         const profileDescriptionInput = document.getElementById('profile-description');
         const profileCancelButton = document.getElementById('profile-cancel');
 
@@ -904,6 +1015,9 @@
 
         // Загружаем список профилей и восстанавливаем активный профиль.
         loadProfiles();
+
+        // Загружаем статус MCP-серверов.
+        loadMCPStatus();
 
         // Восстанавливаем идентификатор проекта.
         const savedProjectId = localStorage.getItem('chat_project_id');
@@ -1788,6 +1902,91 @@
                 alert('Ошибка сети: ' + err.message);
             }
         });
+
+        // --- MCP статус ---
+
+        async function loadMCPStatus() {
+            mcpRefreshButton.disabled = true;
+            mcpStatusContainer.innerHTML = '<div class="mcp-empty">Загрузка...</div>';
+            try {
+                const response = await fetch('/api/mcp/status');
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+                const data = await response.json();
+                renderMCPStatus(data.servers || []);
+            } catch (err) {
+                console.error('Ошибка загрузки статуса MCP:', err);
+                mcpStatusContainer.innerHTML = '<div class="mcp-empty">Ошибка загрузки</div>';
+            } finally {
+                mcpRefreshButton.disabled = false;
+            }
+        }
+
+        function renderMCPStatus(servers) {
+            if (servers.length === 0) {
+                mcpStatusContainer.innerHTML = '<div class="mcp-empty">Нет настроенных MCP-серверов</div>';
+                return;
+            }
+
+            mcpStatusContainer.innerHTML = '';
+            for (const server of servers) {
+                const serverEl = document.createElement('div');
+                serverEl.className = 'mcp-server';
+
+                const statusClass = server.disabled ? 'disabled' : (server.connected ? 'connected' : 'disconnected');
+                const statusTitle = server.disabled ? 'Отключён' : (server.connected ? 'Подключён' : 'Не подключён');
+
+                let toolsHtml = '';
+                if (server.tools && server.tools.length > 0) {
+                    toolsHtml = '<div class="mcp-tools" style="display:none;">' +
+                        server.tools.map(tool => {
+                            const desc = tool.description ? `<div class="mcp-tool-description">${escapeHtml(tool.description)}</div>` : '';
+                            return `<div class="mcp-tool">
+                                <div class="mcp-tool-name">${escapeHtml(tool.name)}</div>
+                                ${desc}
+                            </div>`;
+                        }).join('') +
+                        '</div>';
+                }
+
+                serverEl.innerHTML = `
+                    <div class="mcp-server-header">
+                        <span class="mcp-status ${statusClass}" title="${statusTitle}"></span>
+                        <span class="mcp-server-name">${escapeHtml(server.name)}</span>
+                    </div>
+                    ${server.error ? `<div class="mcp-server-error">${escapeHtml(server.error)}</div>` : ''}
+                    ${server.tools && server.tools.length > 0 ? `<button type="button" class="mcp-tools-toggle">Инструменты (${server.tools.length})</button>` : ''}
+                    ${toolsHtml}
+                `;
+
+                const toggle = serverEl.querySelector('.mcp-tools-toggle');
+                if (toggle) {
+                    const toolsContainer = serverEl.querySelector('.mcp-tools');
+                    toggle.addEventListener('click', () => {
+                        const isHidden = toolsContainer.style.display === 'none';
+                        toolsContainer.style.display = isHidden ? 'flex' : 'none';
+                        toggle.textContent = isHidden
+                            ? `Инструменты (${server.tools.length}) ▲`
+                            : `Инструменты (${server.tools.length})`;
+                    });
+                }
+
+                mcpStatusContainer.appendChild(serverEl);
+            }
+        }
+
+        function escapeHtml(text) {
+            if (text == null) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        mcpRefreshButton.addEventListener('click', loadMCPStatus);
 
         // --- Профили пользователей ---
 

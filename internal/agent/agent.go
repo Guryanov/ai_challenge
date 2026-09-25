@@ -224,44 +224,123 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 		workflowContext = formatWorkflowContext(session)
 	}
 
-	payload, err := buildPayload(a.config, llmReq, messages, userProfileContext, projectContext, invariantContext, workflowContext)
-	if err != nil {
-		return AgentResponse{}, err
-	}
-
 	mainStart := time.Now()
-	body, err := a.client.Call(payload)
-	if err != nil {
-		return AgentResponse{}, err
+	var llmResp AgentResponse
+
+	usedTools := workflowMode == WorkflowModeChat && a.tools != nil && a.config.APIFormat == "openai"
+	if usedTools {
+		llmResp, err = a.runWithTools(&session, llmReq, messages, userProfileContext, projectContext, invariantContext, workflowContext)
+		if err != nil {
+			return AgentResponse{}, err
+		}
+	} else {
+		onceResp, err := a.runOnce(llmReq, messages, nil, userProfileContext, projectContext, invariantContext, workflowContext)
+		if err != nil {
+			return AgentResponse{}, err
+		}
+		llmResp = onceResp.AgentResponse
 	}
 
-	resp := extractResponse(a.config.APIFormat, req.ResponseFormat, body)
-	resp.Duration = time.Since(mainStart)
-	resp.Compressed = strategy == StrategySummary && len(session.Branches[session.ActiveBranch].Messages) > 2
+	llmResp.Duration = time.Since(mainStart)
+	llmResp.Compressed = strategy == StrategySummary && len(session.Branches[session.ActiveBranch].Messages) > 2
 
 	// В режиме workflow сохраняем результат этапа в контексте задачи.
 	if workflowMode == WorkflowModeWorkflow {
-		updateTaskContext(&session, resp.Content)
+		updateTaskContext(&session, llmResp.Content)
 		session.TaskStatus = TaskStatusPending
 	}
 
 	// Сохраняем новое сообщение пользователя и ответ ассистента.
-	sessionTotal, err := a.saveHistory(req.SessionID, &session, originalUserMessage, resp)
+	// При использовании инструментов сообщения пользователя и tool-сообщения уже добавлены в ветку.
+	saveUserMessage := originalUserMessage
+	if usedTools {
+		saveUserMessage = ""
+	}
+	sessionTotal, err := a.saveHistory(req.SessionID, &session, saveUserMessage, llmResp)
 	if err != nil {
 		return AgentResponse{}, err
 	}
-	resp.SessionTotalTokens = sessionTotal
+	llmResp.SessionTotalTokens = sessionTotal
 
-	resp.ActiveBranch = session.ActiveBranch
-	resp.Branches = branchNames(session.Branches)
-	resp.Facts = session.Facts
-	resp.ProjectID = req.ProjectID
-	resp.ProfileID = req.ProfileID
-	resp.TaskStage = session.TaskStage
-	resp.TaskStatus = session.TaskStatus
-	resp.TaskContext = session.TaskContext
+	llmResp.ActiveBranch = session.ActiveBranch
+	llmResp.Branches = branchNames(session.Branches)
+	llmResp.Facts = session.Facts
+	llmResp.ProjectID = req.ProjectID
+	llmResp.ProfileID = req.ProfileID
+	llmResp.TaskStage = session.TaskStage
+	llmResp.TaskStatus = session.TaskStatus
+	llmResp.TaskContext = session.TaskContext
 
-	return resp, nil
+	return llmResp, nil
+}
+
+// runOnce выполняет один вызов LLM и возвращает полный ответ, включая tool_calls.
+func (a *SimpleAgent) runOnce(req AgentRequest, history []history.Message, tools ToolRegistry, userProfileContext, projectContext, invariantContext, workflowContext string) (LLMResponse, error) {
+	payload, err := buildPayload(a.config, req, history, tools, userProfileContext, projectContext, invariantContext, workflowContext)
+	if err != nil {
+		return LLMResponse{}, err
+	}
+
+	body, err := a.client.Call(payload)
+	if err != nil {
+		return LLMResponse{}, err
+	}
+
+	return extractResponse(a.config.APIFormat, req.ResponseFormat, body), nil
+}
+
+// runWithTools выполняет ReAct-цикл вызова инструментов в режиме chat.
+// Сообщения с tool_calls и результаты сохраняются в историю сессии.
+func (a *SimpleAgent) runWithTools(session *history.Session, req AgentRequest, baseMessages []history.Message, userProfileContext, projectContext, invariantContext, workflowContext string) (AgentResponse, error) {
+	const maxIterations = 10
+
+	branch := session.Branches[session.ActiveBranch]
+
+	userMessage := history.Message{Role: "user", Content: req.Message}
+	branch.Messages = append(branch.Messages, userMessage)
+	turnMessages := []history.Message{userMessage}
+
+	for i := 0; i < maxIterations; i++ {
+		conversation := append(baseMessages, turnMessages...)
+		llmResp, err := a.runOnce(req, conversation, a.tools, userProfileContext, projectContext, invariantContext, workflowContext)
+		if err != nil {
+			return AgentResponse{}, err
+		}
+
+		if len(llmResp.ToolCalls) == 0 {
+			// Финальный текстовый ответ добавляется позже через saveHistory.
+			session.Branches[session.ActiveBranch] = branch
+			return llmResp.AgentResponse, nil
+		}
+
+		// Сохраняем сообщение assistant с tool_calls.
+		assistantMsg := history.Message{
+			Role:      "assistant",
+			Content:   llmResp.Content,
+			ToolCalls: llmResp.ToolCalls,
+		}
+		branch.Messages = append(branch.Messages, assistantMsg)
+		turnMessages = append(turnMessages, assistantMsg)
+
+		// Выполняем каждый запрошенный инструмент.
+		for _, tc := range llmResp.ToolCalls {
+			result, err := a.tools.Execute(tc.Function.Name, json.RawMessage(tc.Function.Arguments))
+			if err != nil {
+				result = fmt.Sprintf("Ошибка выполнения инструмента %s: %v", tc.Function.Name, err)
+			}
+
+			toolMsg := history.Message{
+				Role:       "tool",
+				Content:    result,
+				ToolCallID: tc.ID,
+			}
+			branch.Messages = append(branch.Messages, toolMsg)
+			turnMessages = append(turnMessages, toolMsg)
+		}
+	}
+
+	session.Branches[session.ActiveBranch] = branch
+	return AgentResponse{}, fmt.Errorf("превышен лимит итераций вызова инструментов (%d)", maxIterations)
 }
 
 // ClearHistory очищает историю указанной сессии.
@@ -526,7 +605,7 @@ func (a *SimpleAgent) summarize(messages []history.Message) (string, AgentRespon
 	}
 
 	resp := extractResponse(a.config.APIFormat, "text", body)
-	return strings.TrimSpace(resp.Content), resp, nil
+	return strings.TrimSpace(resp.Content), resp.AgentResponse, nil
 }
 
 // ToolRegistry — интерфейс для реестра инструментов.

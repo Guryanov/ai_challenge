@@ -1,0 +1,35 @@
+# Пример конфигурации MCP-серверов.
+# Скопируйте файл в mcp.yaml и настройте под свои нужды.
+#
+# Каждый сервер запускается как отдельный stdio-процесс или подключается через SSE.
+# Имена инструментов в OpenAI-совместимом формате будут иметь вид:
+#   <имя_сервера>_<имя_инструмента>
+# Например: filesystem_read_file
+
+servers:
+  # filesystem:
+  #   type: stdio
+  #   command: uvx
+  #   args:
+  #     - "-y"
+  #     - "@modelcontextprotocol/server-filesystem"
+  #     - "/Users/yourname"
+  #   timeout: 30s
+
+  # fetch:
+  #   type: stdio
+  #   command: uvx
+  #   args:
+  #     - "-y"
+  #     - "@modelcontextprotocol/server-fetch"
+  #   timeout: 30s
+
+  # deepwiki:
+  #   # DeepWiki использует Streamable HTTP транспорт.
+  #   type: http
+  #   url: https://mcp.deepwiki.com/mcp
+  #   # Accept: application/json, text/event-stream выставляется автоматически.
+  #   # При необходимости добавьте заголовки авторизации:
+  #   # headers:
+  #   #   Authorization: Bearer your-token
+  #   timeout: 30s

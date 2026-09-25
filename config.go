@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"ai-chat/internal/agent"
+	"ai-chat/internal/mcp"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,6 +23,7 @@ type serverConfig struct {
 	Port    string
 	Timeout time.Duration
 	Agent   agent.Config
+	MCP     mcp.Config
 }
 
 func getEnvOrDefault(key, defaultValue string) string {
@@ -41,9 +43,15 @@ func loadConfig() serverConfig {
 		}
 	}
 
+	mcpCfg, err := mcp.LoadConfig("mcp.yaml")
+	if err != nil {
+		log.Printf("Предупреждение: не удалось загрузить mcp.yaml: %v", err)
+	}
+
 	cfg := serverConfig{
 		Port:    os.Getenv("PORT"),
 		Timeout: timeout,
+		MCP:     mcpCfg,
 		Agent: agent.Config{
 			ExternalAPI:              os.Getenv("EXTERNAL_API_URL"),
 			APIKey:                   os.Getenv("API_KEY"),
@@ -55,7 +63,7 @@ func loadConfig() serverConfig {
 			UserPromptTemplate:       os.Getenv("USER_PROMPT_TEMPLATE"),
 			OrchestratorInstructions: loadOrchestratorInstructions(),
 			Roles:                    loadRoles(),
-			SummaryMaxTokens:           parseIntEnv("SUMMARY_MAX_TOKENS", defaultSummaryMaxTokens),
+			SummaryMaxTokens:         parseIntEnv("SUMMARY_MAX_TOKENS", defaultSummaryMaxTokens),
 		},
 	}
 

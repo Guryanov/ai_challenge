@@ -276,6 +276,102 @@ Endpoint’ы управления:
 
 Активный профиль передаётся в `POST /api/chat` через поле `profile_id`.
 
+## MCP-инструменты
+
+Приложение поддерживает подключение внешних инструментов через [Model Context Protocol](https://modelcontextprotocol.io/) (stdio-транспорт).
+
+### Конфигурация
+
+Создайте файл `mcp.yaml` в корне проекта (он уже добавлен в `.gitignore`). Пример:
+
+```yaml
+servers:
+  filesystem:
+    type: stdio
+    command: uvx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "/Users/iguryanov"
+    timeout: 30s
+  fetch:
+    type: stdio
+    command: uvx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-fetch"
+    timeout: 30s
+  deepwiki:
+    # DeepWiki использует Streamable HTTP транспорт, а не SSE.
+    # Заголовок Accept: application/json, text/event-stream выставляется автоматически.
+    type: http
+    url: https://mcp.deepwiki.com/mcp
+    timeout: 30s
+```
+
+Поля:
+- `type` — тип транспорта: `stdio` (по умолчанию), `sse` или `http` (streamable HTTP).
+- Для `stdio`:
+  - `command` — исполняемый файл.
+  - `args` — аргументы командной строки.
+  - `env` — дополнительные переменные окружения для процесса сервера.
+- Для `sse` и `http`:
+  - `url` — URL remote MCP-сервера.
+  - `headers` — произвольные HTTP-заголовки (например, `Authorization`).
+- `disabled` — если `true`, сервер не запускается.
+- `timeout` — таймаут вызова инструмента, по умолчанию `30s`.
+
+### Использование
+
+- Инструменты автоматически передаются LLM в формате OpenAI function calling, когда `API_FORMAT=openai`.
+- Имена инструментов префиксируются именем сервера: `filesystem_read_file`.
+- В режиме `chat` агент выполняет встроенный цикл: LLM может вызвать инструмент, получить результат и сформировать финальный ответ.
+- В режиме `workflow` инструменты не используются.
+- История диалога сохраняет сообщения `assistant` с `tool_calls` и сообщения `tool` с результатами.
+
+### Статус MCP в интерфейсе
+
+В левой панели веб-интерфейса отображается секция **MCP серверы**:
+
+- Цветной индикатор состояния каждого сервера (зелёный — подключён, красный — ошибка, серый — отключён).
+- Текст ошибки подключения, если сервер не удалось запустить.
+- Раскрывающийся список инструментов с описанием.
+- Кнопка **Обновить** для повторной загрузки статуса и списка инструментов.
+
+Backend предоставляет endpoint:
+
+```bash
+curl -s http://localhost:8080/api/mcp/status
+```
+
+Ответ:
+
+```json
+{
+  "servers": [
+    {
+      "name": "filesystem",
+      "connected": true,
+      "disabled": false,
+      "error": "",
+      "tools": [
+        {
+          "name": "read_file",
+          "description": "Read a file from the filesystem",
+          "parameters": { "type": "object", "properties": { ... } }
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Ограничения
+
+- Поддерживается только stdio-транспорт.
+- Работает только с OpenAI-совместимым форматом (`API_FORMAT=openai`).
+- Если MCP-сервер не удалось запустить, приложение продолжает работу без его инструментов.
+
 ## Структура
 
 - `main.go` — точка входа, создание агента и запуск HTTP-сервера.
@@ -299,11 +395,17 @@ Endpoint’ы управления:
   - `invariants.go` — типы и функции для работы с инвариантами проекта.
 - `internal/profile/` — хранение профилей пользователей:
   - `store.go` — интерфейс `Store`, файловая реализация `FileStore` и вспомогательные функции.
+- `internal/mcp/` — MCP SDK клиент:
+  - `config.go` — загрузка `mcp.yaml`;
+  - `client.go` — обёртка над stdio MCP-клиентом;
+  - `registry.go` — реализация `agent.ToolRegistry` для нескольких серверов.
 - `static/index.html` — веб-интерфейс чата.
 - `.env.secrets` — чувствительные данные (не коммитится).
 - `.env.secrets.example` — пример секретов (коммитится).
 - `.env` — общие настройки (коммитится).
+- `mcp.yaml` — конфигурация MCP-серверов (не коммитится).
+- `mcp.yaml.example` — пример конфигурации MCP-серверов (коммитится).
 - `orchestrator.yaml` — базовые инструкции оркестратора (коммитится).
 - `roles.yaml` — роли для системного промпта (коммитится).
 - `run.sh` — скрипт запуска.
-- `.gitignore` — исключает секреты, историю и память из репозитория.
+- `.gitignore` — исключает секреты, историю, память и `mcp.yaml` из репозитория.
