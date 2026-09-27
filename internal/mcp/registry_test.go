@@ -135,6 +135,55 @@ func TestNewRegistryTracksDisabledServer(t *testing.T) {
 	}
 }
 
+func TestRegistryDisconnect(t *testing.T) {
+	r := &Registry{
+		clients: map[string]*serverClient{},
+		statuses: map[string]*ServerStatus{
+			"fs": {
+				Name:      "fs",
+				Connected: true,
+				Tools:     []ToolStatus{{Name: "read_file"}},
+			},
+		},
+	}
+
+	if err := r.Disconnect("fs"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	statuses := r.Status()
+	if len(statuses) != 1 || statuses[0].Connected {
+		t.Fatalf("expected disconnected status, got %+v", statuses[0])
+	}
+	if statuses[0].Error != "отключено пользователем" {
+		t.Fatalf("unexpected error message: %q", statuses[0].Error)
+	}
+}
+
+func TestRegistryDisconnectUnknown(t *testing.T) {
+	r := &Registry{statuses: map[string]*ServerStatus{}}
+	if err := r.Disconnect("unknown"); err == nil {
+		t.Fatal("expected error for unknown server")
+	}
+}
+
+func TestRegistryConnectDisabled(t *testing.T) {
+	r := &Registry{
+		clients:  map[string]*serverClient{},
+		statuses: map[string]*ServerStatus{},
+	}
+
+	cfg := ServerConfig{Type: "stdio", Command: "echo", Disabled: true}
+	if err := r.Connect(t.Context(), "disabled", cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	statuses := r.Status()
+	if len(statuses) != 1 || !statuses[0].Disabled {
+		t.Fatalf("expected disabled status, got %+v", statuses[0])
+	}
+}
+
 func TestToOpenAIToolDefinition(t *testing.T) {
 	def := agent.ToolDefinition{
 		Name:        "fs_read",

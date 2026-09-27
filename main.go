@@ -53,6 +53,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", serveIndex)
 	mux.HandleFunc("GET /api/mcp/status", handleMCPStatus(mcpRegistry))
+	mux.HandleFunc("POST /api/mcp/{name}/disconnect", handleMCPDisconnect(mcpRegistry))
+	mux.HandleFunc("POST /api/mcp/{name}/connect", handleMCPConnect("mcp.yaml", mcpRegistry))
 	mux.HandleFunc("POST /api/chat", handleChat(llmAgent))
 	mux.HandleFunc("POST /api/chat/clear", handleClearHistory(llmAgent))
 	mux.HandleFunc("POST /api/session/facts", handleSessionFacts(llmAgent))

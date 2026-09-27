@@ -53,42 +53,50 @@ func NewRegistry(ctx context.Context, cfg Config) *Registry {
 			continue
 		}
 
-		var client *serverClient
-		var err error
-		switch sc.Type {
-		case "sse":
-			client, err = newSseServerClient(ctx, name, sc)
-		case "http":
-			client, err = newHttpServerClient(ctx, name, sc)
-		case "stdio":
-			client, err = newStdioServerClient(ctx, name, sc)
-		default:
-			err = fmt.Errorf("неподдерживаемый тип транспорта %q", sc.Type)
-		}
-
-		if err != nil {
+		if _, err := r.connectServer(ctx, name, sc); err != nil {
 			log.Printf("[mcp] предупреждение: сервер %s недоступен: %v", name, err)
-			r.statuses[name] = &ServerStatus{
-				Name:      name,
-				Connected: false,
-				Error:     err.Error(),
-				Tools:     []ToolStatus{},
-			}
-			continue
 		}
-
-		r.clients[name] = client
-		status := &ServerStatus{
-			Name:      name,
-			Connected: true,
-			Tools:     []ToolStatus{},
-		}
-		status.Tools = r.fetchTools(ctx, name, client)
-		r.statuses[name] = status
-		log.Printf("[mcp] сервер %s подключён", name)
 	}
 
 	return r
+}
+
+// connectServer создаёт клиент для сервера и обновляет его статус.
+// Если клиент уже существует, он предварительно закрывается.
+func (r *Registry) connectServer(ctx context.Context, name string, sc ServerConfig) (*serverClient, error) {
+	var client *serverClient
+	var err error
+	switch sc.Type {
+	case "sse":
+		client, err = newSseServerClient(ctx, name, sc)
+	case "http":
+		client, err = newHttpServerClient(ctx, name, sc)
+	case "stdio":
+		client, err = newStdioServerClient(ctx, name, sc)
+	default:
+		err = fmt.Errorf("неподдерживаемый тип транспорта %q", sc.Type)
+	}
+
+	if err != nil {
+		r.statuses[name] = &ServerStatus{
+			Name:      name,
+			Connected: false,
+			Error:     err.Error(),
+			Tools:     []ToolStatus{},
+		}
+		return nil, err
+	}
+
+	status := &ServerStatus{
+		Name:      name,
+		Connected: true,
+		Tools:     []ToolStatus{},
+	}
+	status.Tools = r.fetchTools(ctx, name, client)
+	r.clients[name] = client
+	r.statuses[name] = status
+	log.Printf("[mcp] сервер %s подключён", name)
+	return client, nil
 }
 
 // Definitions возвращает OpenAI-совместимые определения инструментов от всех серверов.
@@ -180,6 +188,58 @@ func (r *Registry) Status() []ServerStatus {
 	}
 
 	return result
+}
+
+// Disconnect отключает указанный MCP-сервер.
+func (r *Registry) Disconnect(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	status, ok := r.statuses[name]
+	if !ok {
+		return fmt.Errorf("MCP-сервер %s не найден", name)
+	}
+
+	if client, ok := r.clients[name]; ok && client != nil {
+		if err := client.close(); err != nil {
+			log.Printf("[mcp] ошибка закрытия сервера %s: %v", name, err)
+		}
+		delete(r.clients, name)
+	}
+
+	status.Connected = false
+	status.Error = "отключено пользователем"
+	status.Tools = []ToolStatus{}
+	return nil
+}
+
+// Connect подключает указанный MCP-сервер с заданной конфигурацией.
+// Если сервер уже подключён, он сначала отключается.
+func (r *Registry) Connect(ctx context.Context, name string, sc ServerConfig) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if sc.Disabled {
+		r.statuses[name] = &ServerStatus{
+			Name:      name,
+			Connected: false,
+			Disabled:  true,
+			Tools:     []ToolStatus{},
+		}
+		if client, ok := r.clients[name]; ok && client != nil {
+			_ = client.close()
+			delete(r.clients, name)
+		}
+		return nil
+	}
+
+	if client, ok := r.clients[name]; ok && client != nil {
+		_ = client.close()
+		delete(r.clients, name)
+	}
+
+	_, err := r.connectServer(ctx, name, sc)
+	return err
 }
 
 // fetchTools загружает и преобразует список инструментов сервера.

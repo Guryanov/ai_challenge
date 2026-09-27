@@ -605,6 +605,27 @@
             gap: 8px;
             margin-bottom: 4px;
         }
+        .mcp-server-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 6px;
+        }
+        .mcp-server-actions button {
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #fff;
+            cursor: pointer;
+            font-size: 11px;
+            color: #555;
+        }
+        .mcp-server-actions button:hover {
+            background-color: #f0f0f0;
+        }
+        .mcp-server-actions button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
         .mcp-status {
             width: 8px;
             height: 8px;
@@ -1935,7 +1956,11 @@
                 serverEl.className = 'mcp-server';
 
                 const statusClass = server.disabled ? 'disabled' : (server.connected ? 'connected' : 'disconnected');
-                const statusTitle = server.disabled ? 'Отключён' : (server.connected ? 'Подключён' : 'Не подключён');
+                const statusTitle = server.disabled ? 'Отключён в конфигурации' : (server.connected ? 'Подключён' : 'Не подключён');
+                const canToggle = !server.disabled;
+                const actionButton = canToggle
+                    ? `<button type="button" class="mcp-action-button" data-name="${escapeHtml(server.name)}" data-action="${server.connected ? 'disconnect' : 'connect'}">${server.connected ? 'Отключить' : 'Подключить'}</button>`
+                    : '';
 
                 let toolsHtml = '';
                 if (server.tools && server.tools.length > 0) {
@@ -1954,11 +1979,32 @@
                     <div class="mcp-server-header">
                         <span class="mcp-status ${statusClass}" title="${statusTitle}"></span>
                         <span class="mcp-server-name">${escapeHtml(server.name)}</span>
+                        <div class="mcp-server-actions">
+                            ${actionButton}
+                        </div>
                     </div>
                     ${server.error ? `<div class="mcp-server-error">${escapeHtml(server.error)}</div>` : ''}
                     ${server.tools && server.tools.length > 0 ? `<button type="button" class="mcp-tools-toggle">Инструменты (${server.tools.length})</button>` : ''}
                     ${toolsHtml}
                 `;
+
+                const actionBtn = serverEl.querySelector('.mcp-action-button');
+                if (actionBtn) {
+                    actionBtn.addEventListener('click', async () => {
+                        const name = actionBtn.dataset.name;
+                        const action = actionBtn.dataset.action;
+                        actionBtn.disabled = true;
+                        try {
+                            if (action === 'disconnect') {
+                                await disconnectMCPServer(name);
+                            } else {
+                                await connectMCPServer(name);
+                            }
+                        } finally {
+                            await loadMCPStatus();
+                        }
+                    });
+                }
 
                 const toggle = serverEl.querySelector('.mcp-tools-toggle');
                 if (toggle) {
@@ -1973,6 +2019,30 @@
                 }
 
                 mcpStatusContainer.appendChild(serverEl);
+            }
+        }
+
+        async function disconnectMCPServer(name) {
+            try {
+                const response = await fetch(`/api/mcp/${encodeURIComponent(name)}/disconnect`, { method: 'POST' });
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+            } catch (err) {
+                console.error('Ошибка отключения MCP-сервера:', err);
+                alert('Ошибка отключения: ' + err.message);
+            }
+        }
+
+        async function connectMCPServer(name) {
+            try {
+                const response = await fetch(`/api/mcp/${encodeURIComponent(name)}/connect`, { method: 'POST' });
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+            } catch (err) {
+                console.error('Ошибка подключения MCP-сервера:', err);
+                alert('Ошибка подключения: ' + err.message);
             }
         }
 

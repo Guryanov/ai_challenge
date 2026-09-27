@@ -40,6 +40,62 @@ func handleMCPStatus(registry *mcp.Registry) http.HandlerFunc {
 	}
 }
 
+func handleMCPDisconnect(registry *mcp.Registry) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		name := r.PathValue("name")
+		if name == "" {
+			writeError(w, http.StatusBadRequest, "имя сервера не указано")
+			return
+		}
+
+		if err := registry.Disconnect(name); err != nil {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(map[string]bool{"ok": true}); err != nil {
+			log.Printf("Ошибка кодирования ответа отключения MCP: %v", err)
+		}
+	}
+}
+
+func handleMCPConnect(configPath string, registry *mcp.Registry) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		name := r.PathValue("name")
+		if name == "" {
+			writeError(w, http.StatusBadRequest, "имя сервера не указано")
+			return
+		}
+
+		cfg, err := mcp.LoadConfig(configPath)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "не удалось прочитать mcp.yaml: "+err.Error())
+			return
+		}
+
+		sc, ok := cfg.Servers[name]
+		if !ok {
+			writeError(w, http.StatusNotFound, "сервер не найден в mcp.yaml")
+			return
+		}
+
+		if err := registry.Connect(r.Context(), name, sc); err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(map[string]bool{"ok": true}); err != nil {
+			log.Printf("Ошибка кодирования ответа подключения MCP: %v", err)
+		}
+	}
+}
+
 func handleChat(a agent.Agent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
