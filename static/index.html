@@ -688,6 +688,34 @@
             text-align: center;
             padding: 12px 0;
         }
+        .daily-digest {
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .daily-digest h3 {
+            margin: 0 0 8px;
+            font-size: 14px;
+            color: #2c3e50;
+        }
+        .daily-digest-meta {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        .daily-digest-content {
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            color: #333;
+        }
+        .daily-digest-error {
+            font-size: 13px;
+            color: #888;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -826,6 +854,7 @@
     <div id="main">
         <header>Чат с внешним API</header>
         <div id="chat">
+            <div id="daily-digest" class="daily-digest hidden"></div>
             <div class="empty-state">Введите сообщение, чтобы начать диалог</div>
         </div>
         <form id="input-area">
@@ -936,6 +965,7 @@
 
     <script>
         const chat = document.getElementById('chat');
+        const dailyDigest = document.getElementById('daily-digest');
         const form = document.getElementById('input-area');
         const input = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
@@ -1040,6 +1070,9 @@
         // Загружаем статус MCP-серверов.
         loadMCPStatus();
 
+        // Загружаем ежедневную сводку.
+        loadDailyDigest();
+
         // Восстанавливаем идентификатор проекта.
         const savedProjectId = localStorage.getItem('chat_project_id');
         if (savedProjectId) {
@@ -1068,7 +1101,7 @@
             if (newProjectId !== oldProjectId) {
                 sessionId = 'sess_' + Math.random().toString(36).substring(2, 15);
                 localStorage.setItem('chat_session_id', sessionId);
-                chat.innerHTML = '<div class="empty-state">Введите сообщение, чтобы начать диалог</div>';
+                resetChat();
                 facts = {};
                 taskState = { stage: '', status: '', context: {} };
                 renderTaskPanel();
@@ -1313,7 +1346,7 @@
                 renderTaskPanel();
                 contextStrategy.value = 'full';
                 updateStrategyUI();
-                chat.innerHTML = '<div class="empty-state">Введите сообщение, чтобы начать диалог</div>';
+                resetChat();
             } catch (err) {
                 alert('Ошибка сети: ' + err.message);
             }
@@ -1556,6 +1589,53 @@
         function removeEmptyState() {
             const empty = chat.querySelector('.empty-state');
             if (empty) empty.remove();
+        }
+
+        function resetChat() {
+            // Удаляем только сообщения, сохраняя блок ежедневной сводки.
+            chat.querySelectorAll('.exchange').forEach(el => el.remove());
+            if (!chat.querySelector('.empty-state')) {
+                const empty = document.createElement('div');
+                empty.className = 'empty-state';
+                empty.textContent = 'Введите сообщение, чтобы начать диалог';
+                chat.appendChild(empty);
+            }
+            loadDailyDigest();
+        }
+
+        async function loadDailyDigest() {
+            try {
+                const response = await fetch('/api/digest');
+                if (!response.ok) {
+                    dailyDigest.classList.add('hidden');
+                    return;
+                }
+                const data = await response.json();
+                if (data.error) {
+                    dailyDigest.classList.remove('hidden');
+                    dailyDigest.innerHTML = `
+                        <h3>Ежедневная сводка фильмов</h3>
+                        <div class="daily-digest-error">Сводка временно недоступна: ${escapeHtml(data.error)}</div>
+                    `;
+                    return;
+                }
+                if (!data.content) {
+                    dailyDigest.classList.add('hidden');
+                    return;
+                }
+                const generatedAt = data.generated_at
+                    ? new Date(data.generated_at).toLocaleString('ru-RU')
+                    : '';
+                dailyDigest.classList.remove('hidden');
+                dailyDigest.innerHTML = `
+                    <h3>Ежедневная сводка фильмов</h3>
+                    ${generatedAt ? `<div class="daily-digest-meta">Обновлено: ${escapeHtml(generatedAt)}</div>` : ''}
+                    <div class="daily-digest-content">${escapeHtml(data.content)}</div>
+                `;
+            } catch (err) {
+                console.error('Ошибка загрузки сводки:', err);
+                dailyDigest.classList.add('hidden');
+            }
         }
 
         function scrollToBottom() {

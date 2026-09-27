@@ -54,3 +54,10 @@ type invariantsRequest struct {
 type invariantsResponse struct {
 	Invariants []memory.Invariant `json:"invariants"`
 }
+
+// digestResponse — ответ с ежедневной сводкой.
+type digestResponse struct {
+	Content     string `json:"content,omitempty"`
+	GeneratedAt string `json:"generated_at,omitempty"`
+	Error       string `json:"error,omitempty"`
+}

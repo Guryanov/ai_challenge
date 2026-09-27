@@ -6,8 +6,10 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"ai-chat/internal/agent"
+	"ai-chat/internal/digest"
 	"ai-chat/internal/mcp"
 	"ai-chat/internal/memory"
 	"ai-chat/internal/profile"
@@ -474,6 +476,34 @@ func handleDeleteInvariants(store memory.Store) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(invariantsResponse{Invariants: []memory.Invariant{}}); err != nil {
 			log.Printf("Ошибка кодирования ответа: %v", err)
+		}
+	}
+}
+
+func handleDailyDigest(store digest.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		d, err := store.Load()
+		if err != nil {
+			log.Printf("Ошибка загрузки сводки: %v", err)
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		resp := digestResponse{}
+		if d.Error != "" {
+			resp.Error = d.Error
+		} else {
+			resp.Content = d.Content
+			if !d.GeneratedAt.IsZero() {
+				resp.GeneratedAt = d.GeneratedAt.Format(time.RFC3339)
+			}
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Printf("Ошибка кодирования сводки: %v", err)
 		}
 	}
 }

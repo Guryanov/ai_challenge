@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"ai-chat/internal/agent"
+	"ai-chat/internal/digest"
 	"ai-chat/internal/history"
 	"ai-chat/internal/mcp"
 	"ai-chat/internal/memory"
@@ -50,8 +51,18 @@ func main() {
 		WithProfile(profileStore).
 		WithTools(mcpRegistry)
 
+	digestStore, err := digest.NewFileStore("digest")
+	if err != nil {
+		log.Fatalf("Ошибка создания хранилища сводки: %v", err)
+	}
+
+	digestScheduler := digest.NewScheduler(llmAgent, digestStore, cfg.DigestPrompt, cfg.DigestAt, cfg.DigestEnabled)
+	digestScheduler.Start()
+	defer digestScheduler.Stop()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", serveIndex)
+	mux.HandleFunc("GET /api/digest", handleDailyDigest(digestStore))
 	mux.HandleFunc("GET /api/mcp/status", handleMCPStatus(mcpRegistry))
 	mux.HandleFunc("POST /api/mcp/{name}/disconnect", handleMCPDisconnect(mcpRegistry))
 	mux.HandleFunc("POST /api/mcp/{name}/connect", handleMCPConnect("mcp.yaml", mcpRegistry))
