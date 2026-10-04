@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"time"
 
 	"ai-chat/internal/history"
@@ -40,6 +41,10 @@ type AgentRequest struct {
 	Temperature     *float64
 	MaxTokens       *int
 	StopSequence    string
+	Context         context.Context
+	RAGEnabled      *bool  // nil — использовать значение по умолчанию из конфигурации
+	RAGStrategy     string // "fixed" | "structure"; пусто — значение по умолчанию
+	RAGTopK         int    // <= 0 — значение по умолчанию
 }
 
 // AgentResponse — ответ агента.
@@ -60,6 +65,20 @@ type AgentResponse struct {
 	TaskStatus         string
 	TaskContext        history.TaskContext
 	Duration           time.Duration
+}
+
+// RetrievedChunk — фрагмент, найденный в базе знаний проекта.
+type RetrievedChunk struct {
+	Path    string
+	Name    string
+	Section string
+	Score   float64
+	Text    string
+}
+
+// KnowledgeRetriever ищет релевантные фрагменты базы знаний проекта.
+type KnowledgeRetriever interface {
+	Retrieve(ctx context.Context, projectID, strategy, query string, k int) ([]RetrievedChunk, error)
 }
 
 // Agent — интерфейс LLM-агента.

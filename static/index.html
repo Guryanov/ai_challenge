@@ -716,6 +716,179 @@
             color: #888;
             font-style: italic;
         }
+        .kb-status {
+            font-size: 12px;
+            color: #666;
+            min-height: 14px;
+            white-space: pre-wrap;
+        }
+        .kb-file-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+        .kb-file {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: center;
+            font-size: 12px;
+            background-color: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 6px 8px;
+        }
+        .kb-file-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .kb-badge {
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 10px;
+            background-color: #e2e3e5;
+            color: #555;
+            flex-shrink: 0;
+        }
+        .kb-badge.indexed {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .kb-file button {
+            background: none;
+            border: none;
+            color: #dc3545;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .kb-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+        .kb-row > input,
+        .kb-row > select {
+            flex: 1;
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 13px;
+            outline: none;
+        }
+        .kb-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        .kb-buttons button {
+            flex: 1;
+            min-width: 80px;
+            padding: 8px 10px;
+            border: none;
+            border-radius: 6px;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .kb-buttons button.secondary {
+            background-color: #6c757d;
+        }
+        .kb-dialog-content {
+            max-width: 900px;
+            width: 95%;
+        }
+        .kb-section {
+            border-top: 1px solid #eee;
+            padding-top: 12px;
+            margin-top: 12px;
+        }
+        .kb-section h4 {
+            margin: 0 0 8px;
+            font-size: 14px;
+            color: #2c3e50;
+        }
+        .kb-results {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .kb-result {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 12px;
+            background-color: #fafafa;
+        }
+        .kb-result-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .kb-result-meta {
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+        .kb-result-text {
+            white-space: pre-wrap;
+            color: #444;
+            max-height: 120px;
+            overflow: auto;
+        }
+        table.kb-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        table.kb-table th,
+        table.kb-table td {
+            border: 1px solid #e0e0e0;
+            padding: 5px 6px;
+            text-align: left;
+        }
+        table.kb-table th {
+            background-color: #f0f0f0;
+        }
+        table.kb-table tr.best td {
+            background-color: #d4edda;
+            font-weight: 600;
+        }
+        .kb-query-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: flex-start;
+            font-size: 12px;
+            background-color: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 6px 8px;
+        }
+        .kb-query-item button {
+            background: none;
+            border: none;
+            color: #dc3545;
+            cursor: pointer;
+        }
+        .rag-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+        .rag-toggle input {
+            width: auto;
+        }
     </style>
 </head>
 <body>
@@ -757,6 +930,17 @@
         <div class="tool-group">
             <label for="project-id">Проект</label>
             <input type="text" id="project-id" placeholder="my-project" title="Буквы, цифры, пробелы, дефисы и подчёркивания">
+        </div>
+
+        <div id="rag-panel" class="tool-group hidden">
+            <label class="rag-toggle"><input type="checkbox" id="rag-enabled" checked> База знаний (RAG)</label>
+            <div class="kb-row">
+                <select id="rag-strategy" title="Стратегия поиска по базе знаний">
+                    <option value="structure">structure — по структуре</option>
+                    <option value="fixed">fixed — по размеру</option>
+                </select>
+                <input type="number" id="rag-top-k" min="1" value="5" title="top-K" style="flex:0 0 80px;">
+            </div>
         </div>
 
         <div id="memory-panel" class="tool-group hidden">
@@ -848,6 +1032,22 @@
                 <button type="button" id="mcp-refresh" class="mcp-refresh">Обновить</button>
             </div>
             <div id="mcp-status">Загрузка...</div>
+        </div>
+
+        <div id="kb-panel" class="tool-group hidden">
+            <div class="mcp-header">
+                <h2>База знаний</h2>
+                <button type="button" id="kb-open" class="mcp-refresh">Открыть</button>
+            </div>
+            <input type="file" id="kb-file-input" multiple accept=".pdf,.txt,.md,.markdown,.csv,.json,.log,.yaml,.yml">
+            <button type="button" id="kb-upload" class="memory-add-button">Загрузить файлы</button>
+            <div id="kb-file-list" class="kb-file-list"></div>
+            <div class="kb-buttons">
+                <button type="button" id="kb-index-all">Индексировать</button>
+                <button type="button" id="kb-index-fixed" class="secondary">fixed</button>
+                <button type="button" id="kb-index-structure" class="secondary">structure</button>
+            </div>
+            <div id="kb-status" class="kb-status"></div>
         </div>
     </aside>
 
@@ -963,6 +1163,59 @@
         </div>
     </div>
 
+    <div id="kb-dialog" class="dialog hidden">
+        <div class="dialog-content kb-dialog-content">
+            <h3>База знаний — поиск и метрики</h3>
+
+            <div class="kb-section">
+                <h4>Поиск</h4>
+                <div class="kb-row">
+                    <select id="kb-search-strategy">
+                        <option value="fixed">fixed — по размеру</option>
+                        <option value="structure" selected>structure — по структуре</option>
+                    </select>
+                    <input type="number" id="kb-search-k" min="1" value="5" title="top-K" style="flex:0 0 90px;">
+                </div>
+                <div class="kb-row">
+                    <input type="text" id="kb-search-query" placeholder="Поисковый запрос">
+                    <button type="button" id="kb-search-button" style="flex:0 0 110px; border:none; border-radius:6px; background-color:#007bff; color:#fff; cursor:pointer;">Искать</button>
+                </div>
+                <div id="kb-results" class="kb-results"></div>
+            </div>
+
+            <div class="kb-section">
+                <h4>Тест-запросы</h4>
+                <div id="kb-query-list" class="kb-results" style="max-height:180px;"></div>
+                <div class="kb-row">
+                    <input type="text" id="kb-query-text" placeholder="Вопрос">
+                </div>
+                <div class="kb-row">
+                    <input type="text" id="kb-query-path" placeholder="Ожидаемый файл (path)">
+                    <input type="text" id="kb-query-section" placeholder="Секция (необязательно)">
+                </div>
+                <div class="kb-buttons">
+                    <button type="button" id="kb-query-add">Добавить запрос</button>
+                    <button type="button" id="kb-query-generate" class="secondary">Сгенерировать N через LLM</button>
+                    <input type="number" id="kb-generate-n" min="1" value="5" title="Сколько вопросов" style="flex:0 0 70px; padding:8px; border:1px solid #ccc; border-radius:6px;">
+                </div>
+            </div>
+
+            <div class="kb-section">
+                <h4>Метрики и сравнение стратегий</h4>
+                <div class="kb-buttons">
+                    <button type="button" id="kb-metrics-refresh">Обновить метрики</button>
+                    <button type="button" id="kb-benchmark" class="secondary">Бенчмарк (Recall/Precision/MRR)</button>
+                    <input type="number" id="kb-benchmark-k" min="1" value="5" title="K" style="flex:0 0 70px; padding:8px; border:1px solid #ccc; border-radius:6px;">
+                </div>
+                <div id="kb-metrics"></div>
+            </div>
+
+            <div class="dialog-buttons">
+                <button type="button" id="kb-close" class="secondary">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const chat = document.getElementById('chat');
         const dailyDigest = document.getElementById('daily-digest');
@@ -1030,6 +1283,41 @@
         const profileDescriptionInput = document.getElementById('profile-description');
         const profileCancelButton = document.getElementById('profile-cancel');
 
+        const kbPanel = document.getElementById('kb-panel');
+        const kbOpenButton = document.getElementById('kb-open');
+        const kbDialog = document.getElementById('kb-dialog');
+        const kbCloseButton = document.getElementById('kb-close');
+        const kbFileInput = document.getElementById('kb-file-input');
+        const kbUploadButton = document.getElementById('kb-upload');
+        const kbFileList = document.getElementById('kb-file-list');
+        const kbIndexAllButton = document.getElementById('kb-index-all');
+        const kbIndexFixedButton = document.getElementById('kb-index-fixed');
+        const kbIndexStructureButton = document.getElementById('kb-index-structure');
+        const kbStatus = document.getElementById('kb-status');
+        const kbSearchStrategy = document.getElementById('kb-search-strategy');
+        const kbSearchK = document.getElementById('kb-search-k');
+        const kbSearchQuery = document.getElementById('kb-search-query');
+        const kbSearchButton = document.getElementById('kb-search-button');
+        const kbResults = document.getElementById('kb-results');
+        const kbQueryList = document.getElementById('kb-query-list');
+        const kbQueryText = document.getElementById('kb-query-text');
+        const kbQueryPath = document.getElementById('kb-query-path');
+        const kbQuerySection = document.getElementById('kb-query-section');
+        const kbQueryAddButton = document.getElementById('kb-query-add');
+        const kbQueryGenerateButton = document.getElementById('kb-query-generate');
+        const kbGenerateN = document.getElementById('kb-generate-n');
+        const kbMetricsRefreshButton = document.getElementById('kb-metrics-refresh');
+        const kbBenchmarkButton = document.getElementById('kb-benchmark');
+        const kbBenchmarkK = document.getElementById('kb-benchmark-k');
+        const kbMetrics = document.getElementById('kb-metrics');
+
+        let kbQueries = [];
+
+        const ragPanel = document.getElementById('rag-panel');
+        const ragEnabled = document.getElementById('rag-enabled');
+        const ragStrategy = document.getElementById('rag-strategy');
+        const ragTopK = document.getElementById('rag-top-k');
+
         const workflowMode = document.getElementById('workflow-mode');
         const taskPanel = document.getElementById('task-panel');
         const taskStateLabel = document.getElementById('task-state');
@@ -1073,14 +1361,39 @@
         // Загружаем ежедневную сводку.
         loadDailyDigest();
 
+        // Восстанавливаем настройки RAG.
+        const savedRAGEnabled = localStorage.getItem('rag_enabled');
+        if (savedRAGEnabled !== null) {
+            ragEnabled.checked = savedRAGEnabled === 'true';
+        }
+        const savedRAGStrategy = localStorage.getItem('rag_strategy');
+        if (savedRAGStrategy) {
+            ragStrategy.value = savedRAGStrategy;
+        }
+        const savedRAGTopK = localStorage.getItem('rag_top_k');
+        if (savedRAGTopK) {
+            ragTopK.value = savedRAGTopK;
+        }
+        ragEnabled.addEventListener('change', () => {
+            localStorage.setItem('rag_enabled', ragEnabled.checked ? 'true' : 'false');
+        });
+        ragStrategy.addEventListener('change', () => {
+            localStorage.setItem('rag_strategy', ragStrategy.value);
+        });
+        ragTopK.addEventListener('change', () => {
+            localStorage.setItem('rag_top_k', ragTopK.value);
+        });
+
         // Восстанавливаем идентификатор проекта.
         const savedProjectId = localStorage.getItem('chat_project_id');
         if (savedProjectId) {
             projectIdInput.value = savedProjectId;
             loadMemory(savedProjectId);
+            loadKBFiles(savedProjectId);
         }
         updateMemoryPanel();
         updateInvariantsPanel();
+        updateKBPanel();
 
         let projectIdDebounceTimer = null;
 
@@ -1116,6 +1429,9 @@
             if (newProjectId) {
                 await loadMemory(newProjectId);
             }
+            await loadKBFiles(newProjectId);
+            loadKBQueries();
+            loadKBMetrics(newProjectId);
         }
 
         projectIdInput.addEventListener('input', () => {
@@ -1180,7 +1496,10 @@
                 workflow_mode: workflowMode.value,
                 temperature: parseFloat(temperature.value) || null,
                 max_tokens: parseInt(maxTokens.value, 10) || null,
-                stop_sequence: stopSequence.value.trim() || null
+                stop_sequence: stopSequence.value.trim() || null,
+                rag_enabled: ragEnabled.checked,
+                rag_strategy: ragStrategy.value,
+                rag_top_k: parseInt(ragTopK.value, 10) || 0
             };
 
             try {
@@ -2284,6 +2603,388 @@
                 alert('Ошибка сети: ' + err.message);
             }
         });
+        // --- База знаний ---
+        function currentProjectId() {
+            return projectIdInput.value.trim();
+        }
+
+        function setKBStatus(message) {
+            kbStatus.textContent = message || '';
+        }
+
+        function updateKBPanel() {
+            if (currentProjectId()) {
+                kbPanel.classList.remove('hidden');
+            } else {
+                kbPanel.classList.add('hidden');
+            }
+            updateRAGPanel();
+        }
+
+        function updateRAGPanel() {
+            if (currentProjectId()) {
+                ragPanel.classList.remove('hidden');
+            } else {
+                ragPanel.classList.add('hidden');
+            }
+        }
+
+        async function loadKBFiles(projectId) {
+            const pid = projectId || currentProjectId();
+            updateKBPanel();
+            if (!pid) {
+                kbFileList.innerHTML = '';
+                return;
+            }
+            try {
+                const response = await fetch('/api/kb/files?project_id=' + encodeURIComponent(pid));
+                const data = await response.json();
+                if (!response.ok) {
+                    console.error('Ошибка загрузки файлов:', data.error);
+                    return;
+                }
+                renderKBFiles(data.files || []);
+            } catch (err) {
+                console.error('Ошибка сети при загрузке файлов:', err);
+            }
+        }
+
+        function renderKBFiles(files) {
+            kbFileList.innerHTML = '';
+            if (files.length === 0) {
+                kbFileList.innerHTML = '<div class="kb-status">Нет загруженных файлов</div>';
+                return;
+            }
+            for (const f of files) {
+                const el = document.createElement('div');
+                el.className = 'kb-file';
+                el.innerHTML = `<span class="kb-file-name" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</span>
+                    <span class="kb-badge ${f.indexed ? 'indexed' : ''}">${f.indexed ? 'индекс' : 'нет'}</span>
+                    <button type="button" title="Удалить">✕</button>`;
+                el.querySelector('button').addEventListener('click', () => deleteKBFile(f.path));
+                kbFileList.appendChild(el);
+            }
+        }
+
+        async function uploadKBFiles() {
+            const pid = currentProjectId();
+            if (!pid) { alert('Укажите Project ID'); return; }
+            const files = kbFileInput.files;
+            if (!files || files.length === 0) { alert('Выберите файлы'); return; }
+
+            const formData = new FormData();
+            formData.append('project_id', pid);
+            for (const file of files) {
+                formData.append('files', file);
+            }
+
+            kbUploadButton.disabled = true;
+            setKBStatus('Загрузка...');
+            try {
+                const response = await fetch('/api/kb/files', { method: 'POST', body: formData });
+                const data = await response.json();
+                if (!response.ok) { setKBStatus('Ошибка: ' + (data.error || 'неизвестная')); return; }
+                renderKBFiles(data.files || []);
+                kbFileInput.value = '';
+                setKBStatus('Файлы загружены. Не забудьте проиндексировать.');
+            } catch (err) {
+                setKBStatus('Ошибка сети: ' + err.message);
+            } finally {
+                kbUploadButton.disabled = false;
+            }
+        }
+
+        async function deleteKBFile(path) {
+            const pid = currentProjectId();
+            if (!pid || !confirm('Удалить файл ' + path + '?')) return;
+            try {
+                const response = await fetch('/api/kb/files/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: pid, path: path })
+                });
+                const data = await response.json();
+                if (!response.ok) { alert(data.error || 'Ошибка'); return; }
+                renderKBFiles(data.files || []);
+            } catch (err) {
+                alert('Ошибка сети: ' + err.message);
+            }
+        }
+
+        async function indexKB(strategy) {
+            const pid = currentProjectId();
+            if (!pid) { alert('Укажите Project ID'); return; }
+            const buttons = [kbIndexAllButton, kbIndexFixedButton, kbIndexStructureButton];
+            buttons.forEach(b => { b.disabled = true; });
+            setKBStatus('Индексация' + (strategy ? ' (' + strategy + ')' : '') + '...');
+            try {
+                const response = await fetch('/api/kb/index', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: pid, strategy: strategy || '' })
+                });
+                const data = await response.json();
+                if (!response.ok) { setKBStatus('Ошибка: ' + (data.error || 'неизвестная')); return; }
+                const lines = (data.runs || []).map(r =>
+                    `${r.strategy}: чанков ${r.chunk_count}, файлов ${r.file_count}, эмбеддингов ${r.embed_count} (кэш ${r.cache_hits}), ${r.total_ms} мс`);
+                setKBStatus(lines.join('\n') || 'Готово');
+                await loadKBFiles(pid);
+                await loadKBMetrics(pid);
+            } catch (err) {
+                setKBStatus('Ошибка сети: ' + err.message);
+            } finally {
+                buttons.forEach(b => { b.disabled = false; });
+            }
+        }
+
+        async function searchKB() {
+            const pid = currentProjectId();
+            const query = kbSearchQuery.value.trim();
+            if (!pid || !query) { alert('Укажите Project ID и запрос'); return; }
+            kbSearchButton.disabled = true;
+            kbResults.innerHTML = '<div class="kb-status">Поиск...</div>';
+            try {
+                const response = await fetch('/api/kb/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_id: pid,
+                        strategy: kbSearchStrategy.value,
+                        query: query,
+                        k: parseInt(kbSearchK.value, 10) || 5
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    kbResults.innerHTML = '<div class="kb-status">Ошибка: ' + escapeHtml(data.error || '') + '</div>';
+                    return;
+                }
+                renderKBResults(data.results || []);
+            } catch (err) {
+                kbResults.innerHTML = '<div class="kb-status">Ошибка сети: ' + escapeHtml(err.message) + '</div>';
+            } finally {
+                kbSearchButton.disabled = false;
+            }
+        }
+
+        function renderKBResults(results) {
+            kbResults.innerHTML = '';
+            if (results.length === 0) {
+                kbResults.innerHTML = '<div class="kb-status">Ничего не найдено</div>';
+                return;
+            }
+            for (const r of results) {
+                const el = document.createElement('div');
+                el.className = 'kb-result';
+                el.innerHTML = `<div class="kb-result-head"><span>${escapeHtml(r.name)}</span><span>${Number(r.score).toFixed(4)}</span></div>
+                    <div class="kb-result-meta">${escapeHtml(r.path)} · section: ${escapeHtml(r.section)} · ${escapeHtml(r.chunk_id)}</div>
+                    <div class="kb-result-text">${escapeHtml(r.text)}</div>`;
+                kbResults.appendChild(el);
+            }
+        }
+
+        async function loadKBQueries() {
+            const pid = currentProjectId();
+            if (!pid) { kbQueryList.innerHTML = ''; return; }
+            try {
+                const response = await fetch('/api/kb/queries?project_id=' + encodeURIComponent(pid));
+                const data = await response.json();
+                if (!response.ok) return;
+                kbQueries = data.queries || [];
+                renderKBQueries();
+            } catch (err) {
+                console.error('Ошибка загрузки тест-запросов:', err);
+            }
+        }
+
+        function renderKBQueries() {
+            kbQueryList.innerHTML = '';
+            if (kbQueries.length === 0) {
+                kbQueryList.innerHTML = '<div class="kb-status">Нет тест-запросов</div>';
+                return;
+            }
+            for (const q of kbQueries) {
+                const el = document.createElement('div');
+                el.className = 'kb-query-item';
+                const suffix = q.expected_section ? ' · ' + escapeHtml(q.expected_section) : '';
+                el.innerHTML = `<div><div>${escapeHtml(q.text)}</div><div class="kb-result-meta">→ ${escapeHtml(q.expected_path)}${suffix} <em>(${escapeHtml(q.source)})</em></div></div>`;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = '✕';
+                btn.addEventListener('click', () => deleteKBQuery(q.id));
+                el.appendChild(btn);
+                kbQueryList.appendChild(el);
+            }
+        }
+
+        async function addKBQuery() {
+            const pid = currentProjectId();
+            const text = kbQueryText.value.trim();
+            const expectedPath = kbQueryPath.value.trim();
+            if (!pid || !text || !expectedPath) { alert('Заполните вопрос и ожидаемый файл'); return; }
+            try {
+                const response = await fetch('/api/kb/queries', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_id: pid,
+                        text: text,
+                        expected_path: expectedPath,
+                        expected_section: kbQuerySection.value.trim()
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) { alert(data.error || 'Ошибка'); return; }
+                kbQueries = data.queries || [];
+                renderKBQueries();
+                kbQueryText.value = '';
+                kbQuerySection.value = '';
+            } catch (err) {
+                alert('Ошибка сети: ' + err.message);
+            }
+        }
+
+        async function deleteKBQuery(id) {
+            const pid = currentProjectId();
+            if (!pid) return;
+            try {
+                const response = await fetch('/api/kb/queries/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: pid, id: id })
+                });
+                const data = await response.json();
+                if (!response.ok) { alert(data.error || 'Ошибка'); return; }
+                kbQueries = data.queries || [];
+                renderKBQueries();
+            } catch (err) {
+                alert('Ошибка сети: ' + err.message);
+            }
+        }
+
+        async function generateKBQueries() {
+            const pid = currentProjectId();
+            if (!pid) { alert('Укажите Project ID'); return; }
+            kbQueryGenerateButton.disabled = true;
+            setKBStatus('Генерация вопросов через LLM...');
+            try {
+                const response = await fetch('/api/kb/queries/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_id: pid,
+                        strategy: kbSearchStrategy.value,
+                        n: parseInt(kbGenerateN.value, 10) || 5
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) { setKBStatus('Ошибка: ' + (data.error || 'неизвестная')); return; }
+                kbQueries = data.queries || [];
+                renderKBQueries();
+                setKBStatus('Сгенерировано вопросов: ' + (data.generated || 0));
+            } catch (err) {
+                setKBStatus('Ошибка сети: ' + err.message);
+            } finally {
+                kbQueryGenerateButton.disabled = false;
+            }
+        }
+
+        async function runKBBenchmark() {
+            const pid = currentProjectId();
+            if (!pid) { alert('Укажите Project ID'); return; }
+            kbBenchmarkButton.disabled = true;
+            setKBStatus('Бенчмарк...');
+            try {
+                const response = await fetch('/api/kb/benchmark', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: pid, k: parseInt(kbBenchmarkK.value, 10) || 5 })
+                });
+                const data = await response.json();
+                if (!response.ok) { setKBStatus('Ошибка: ' + (data.error || 'неизвестная')); return; }
+                setKBStatus('Бенчмарк завершён');
+                await loadKBMetrics(pid);
+            } catch (err) {
+                setKBStatus('Ошибка сети: ' + err.message);
+            } finally {
+                kbBenchmarkButton.disabled = false;
+            }
+        }
+
+        async function loadKBMetrics(projectId) {
+            const pid = projectId || currentProjectId();
+            if (!pid) { kbMetrics.innerHTML = ''; return; }
+            try {
+                const response = await fetch('/api/kb/metrics?project_id=' + encodeURIComponent(pid));
+                const data = await response.json();
+                if (!response.ok) {
+                    kbMetrics.innerHTML = '<div class="kb-status">Ошибка: ' + escapeHtml(data.error || '') + '</div>';
+                    return;
+                }
+                renderKBMetrics(data);
+            } catch (err) {
+                kbMetrics.innerHTML = '<div class="kb-status">Ошибка сети: ' + escapeHtml(err.message) + '</div>';
+            }
+        }
+
+        function renderKBMetrics(data) {
+            const structural = data.structural || [];
+            const indexRuns = data.index_runs || [];
+            const bench = data.benchmark || [];
+            let html = '';
+
+            if (structural.length) {
+                html += '<h4 style="margin:10px 0 4px; font-size:13px;">Структура индекса</h4><table class="kb-table"><tr><th>Стратегия</th><th>Файлов</th><th>Чанков</th><th>Секций</th><th>min</th><th>avg</th><th>max</th><th>σ</th><th>avg ток.</th></tr>';
+                for (const s of structural) {
+                    html += `<tr><td>${escapeHtml(s.strategy || '')}</td><td>${s.file_count}</td><td>${s.chunk_count}</td><td>${s.section_count}</td><td>${s.min_chars}</td><td>${Number(s.avg_chars || 0).toFixed(1)}</td><td>${s.max_chars}</td><td>${Number(s.std_dev_chars || 0).toFixed(1)}</td><td>${Number(s.avg_tokens || 0).toFixed(1)}</td></tr>`;
+                }
+                html += '</table>';
+            }
+
+            if (indexRuns.length) {
+                html += '<h4 style="margin:10px 0 4px; font-size:13px;">Последняя индексация</h4><table class="kb-table"><tr><th>Стратегия</th><th>Чанков</th><th>Эмбеддингов</th><th>Кэш</th><th>embed, мс</th><th>всего, мс</th></tr>';
+                for (const r of indexRuns) {
+                    html += `<tr><td>${escapeHtml(r.strategy || '')}</td><td>${r.chunk_count}</td><td>${r.embed_count}</td><td>${r.cache_hits}</td><td>${r.embed_ms}</td><td>${r.total_ms}</td></tr>`;
+                }
+                html += '</table>';
+            }
+
+            if (bench.length) {
+                const bestRecall = Math.max(...bench.map(b => b.recall));
+                html += '<h4 style="margin:10px 0 4px; font-size:13px;">Бенчмарк</h4><table class="kb-table"><tr><th>Стратегия</th><th>Recall@K</th><th>Precision@K</th><th>MRR</th></tr>';
+                for (const b of bench) {
+                    const cls = b.recall === bestRecall ? ' class="best"' : '';
+                    html += `<tr${cls}><td>${escapeHtml(b.strategy || '')}</td><td>${Number(b.recall).toFixed(3)}</td><td>${Number(b.precision).toFixed(3)}</td><td>${Number(b.mrr).toFixed(3)}</td></tr>`;
+                }
+                html += '</table>';
+            }
+
+            kbMetrics.innerHTML = html || '<div class="kb-status">Индекс пуст. Загрузите файлы и выполните индексацию.</div>';
+        }
+
+        kbOpenButton.addEventListener('click', () => {
+            kbDialog.classList.remove('hidden');
+            loadKBQueries();
+            loadKBMetrics();
+        });
+        kbCloseButton.addEventListener('click', () => kbDialog.classList.add('hidden'));
+        kbDialog.addEventListener('click', (e) => {
+            if (e.target === kbDialog) kbDialog.classList.add('hidden');
+        });
+        kbUploadButton.addEventListener('click', uploadKBFiles);
+        kbIndexAllButton.addEventListener('click', () => indexKB(''));
+        kbIndexFixedButton.addEventListener('click', () => indexKB('fixed'));
+        kbIndexStructureButton.addEventListener('click', () => indexKB('structure'));
+        kbSearchButton.addEventListener('click', searchKB);
+        kbQueryAddButton.addEventListener('click', addKBQuery);
+        kbQueryGenerateButton.addEventListener('click', generateKBQueries);
+        kbMetricsRefreshButton.addEventListener('click', () => loadKBMetrics());
+        kbBenchmarkButton.addEventListener('click', runKBBenchmark);
+        kbSearchQuery.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') searchKB();
+        });
+
+        updateKBPanel();
     </script>
 </body>
 </html>

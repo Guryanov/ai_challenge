@@ -12,6 +12,9 @@ mcp.yaml
 /profiles/
 /digest/
 
+# Индекс базы знаний (SQLite)
+/data/
+
 # Коммитится: .env (общие настройки, не содержит ключей)
 
 # Скомпилированные бинарники
@@ -35,3 +38,4 @@ ai-chat
 .DS_Store
 Thumbs.db
 .kilo
+.env

@@ -7,7 +7,9 @@ import (
 
 	"ai-chat/internal/agent"
 	"ai-chat/internal/digest"
+	"ai-chat/internal/embed"
 	"ai-chat/internal/history"
+	"ai-chat/internal/knowledge"
 	"ai-chat/internal/mcp"
 	"ai-chat/internal/memory"
 	"ai-chat/internal/profile"
@@ -60,6 +62,38 @@ func main() {
 	digestScheduler.Start()
 	defer digestScheduler.Stop()
 
+	knowledgeStore, err := knowledge.NewStore(cfg.Knowledge.IndexDBPath)
+	if err != nil {
+		log.Fatalf("Ошибка открытия индекса базы знаний: %v", err)
+	}
+	defer func() {
+		if err := knowledgeStore.Close(); err != nil {
+			log.Printf("Ошибка закрытия базы знаний: %v", err)
+		}
+	}()
+
+	embedder := embed.NewClient(
+		cfg.Knowledge.EmbedAPIFormat,
+		cfg.Knowledge.EmbedAPIURL,
+		cfg.Knowledge.EmbedAPIKey,
+		cfg.Knowledge.EmbedModel,
+		cfg.Knowledge.EmbedBatch,
+		cfg.Timeout,
+	)
+	log.Printf("Эмбеддинги: формат %s, модель %s, адрес %s", cfg.Knowledge.EmbedAPIFormat, cfg.Knowledge.EmbedModel, cfg.Knowledge.EmbedAPIURL)
+
+	kbService := knowledge.NewService(knowledgeStore, embedder, knowledge.Config{
+		ChunkSize:    cfg.Knowledge.ChunkSize,
+		ChunkOverlap: cfg.Knowledge.ChunkOverlap,
+		ChunkMinSize: cfg.Knowledge.ChunkMinSize,
+		TopK:         cfg.Knowledge.SearchTopK,
+		EmbedModel:   cfg.Knowledge.EmbedModel,
+	}, newQueryGenerator(cfg.Agent, httpClient))
+
+	// Подключаем базу знаний к агенту для RAG-ответов.
+	llmAgent.WithKnowledge(newKBRetriever(kbService))
+	log.Printf("RAG: включён=%t, стратегия=%s, top-K=%d", cfg.Agent.RAGEnabled, cfg.Agent.RAGStrategy, cfg.Agent.RAGTopK)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", serveIndex)
 	mux.HandleFunc("GET /api/digest", handleDailyDigest(digestStore))
@@ -82,6 +116,19 @@ func main() {
 	mux.HandleFunc("POST /api/task/approve", handleTaskApprove(llmAgent))
 	mux.HandleFunc("POST /api/task/reject", handleTaskReject(llmAgent))
 	mux.HandleFunc("POST /api/task/cancel", handleTaskCancel(llmAgent))
+
+	mux.HandleFunc("POST /api/kb/files", handleKBUpload(kbService, cfg.Knowledge.MaxUploadBytes))
+	mux.HandleFunc("POST /api/kb/text", handleKBText(kbService))
+	mux.HandleFunc("GET /api/kb/files", handleKBListFiles(kbService))
+	mux.HandleFunc("POST /api/kb/files/delete", handleKBDeleteFile(kbService))
+	mux.HandleFunc("POST /api/kb/index", handleKBIndex(kbService))
+	mux.HandleFunc("POST /api/kb/search", handleKBSearch(kbService))
+	mux.HandleFunc("GET /api/kb/metrics", handleKBMetrics(kbService))
+	mux.HandleFunc("GET /api/kb/queries", handleKBListQueries(kbService))
+	mux.HandleFunc("POST /api/kb/queries", handleKBAddQuery(kbService))
+	mux.HandleFunc("POST /api/kb/queries/delete", handleKBDeleteQuery(kbService))
+	mux.HandleFunc("POST /api/kb/queries/generate", handleKBGenerateQueries(kbService))
+	mux.HandleFunc("POST /api/kb/benchmark", handleKBBenchmark(kbService))
 
 	addr := ":" + cfg.Port
 	log.Printf("Сервер запущен на http://localhost%s", addr)

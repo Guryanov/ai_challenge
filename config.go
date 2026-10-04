@@ -18,7 +18,34 @@ const (
 	defaultTimeout          = 60 * time.Second
 	defaultSummaryMaxTokens = 500
 	defaultDigestAt         = "09:00"
+
+	defaultIndexDBPath      = "data/index.db"
+	defaultOllamaURL        = "http://localhost:11434"
+	defaultOllamaEmbedModel = "nomic-embed-text"
+	defaultOpenAIEmbedModel = "SMLab/bge-m3"
+	defaultEmbedAPIFormat   = "openai"
+	defaultEmbedBatch       = 32
+	defaultChunkSize        = 1000
+	defaultChunkOverlap     = 200
+	defaultChunkMinSize     = 200
+	defaultSearchTopK       = 5
+	defaultMaxUploadMB      = 10
+	defaultRAGStrategy      = "structure"
 )
+
+type knowledgeConfig struct {
+	IndexDBPath    string
+	EmbedAPIFormat string
+	EmbedAPIURL    string
+	EmbedAPIKey    string
+	EmbedModel     string
+	EmbedBatch     int
+	ChunkSize      int
+	ChunkOverlap   int
+	ChunkMinSize   int
+	SearchTopK     int
+	MaxUploadBytes int64
+}
 
 type serverConfig struct {
 	Port          string
@@ -28,6 +55,7 @@ type serverConfig struct {
 	DigestEnabled bool
 	DigestAt      string
 	DigestPrompt  string
+	Knowledge     knowledgeConfig
 }
 
 func getEnvOrDefault(key, defaultValue string) string {
@@ -71,6 +99,9 @@ func loadConfig() serverConfig {
 			OrchestratorInstructions: loadOrchestratorInstructions(),
 			Roles:                    loadRoles(),
 			SummaryMaxTokens:         parseIntEnv("SUMMARY_MAX_TOKENS", defaultSummaryMaxTokens),
+			RAGEnabled:               parseBoolEnv("RAG_ENABLED", true),
+			RAGStrategy:              getEnvOrDefault("RAG_STRATEGY", defaultRAGStrategy),
+			RAGTopK:                  parseIntEnv("RAG_TOP_K", defaultSearchTopK),
 		},
 	}
 
@@ -85,6 +116,14 @@ func loadConfig() serverConfig {
 			log.Printf("Предупреждение: неверный формат DAILY_DIGEST_AT=%q, используется значение по умолчанию %s", cfg.DigestAt, defaultDigestAt)
 			cfg.DigestAt = defaultDigestAt
 		}
+	}
+
+	cfg.Knowledge = loadKnowledgeConfig(cfg.Agent)
+
+	if cfg.Knowledge.ChunkOverlap >= cfg.Knowledge.ChunkSize {
+		log.Printf("Предупреждение: CHUNK_OVERLAP (%d) >= CHUNK_SIZE (%d), используется overlap по умолчанию %d",
+			cfg.Knowledge.ChunkOverlap, cfg.Knowledge.ChunkSize, defaultChunkOverlap)
+		cfg.Knowledge.ChunkOverlap = defaultChunkOverlap
 	}
 
 	// Если задан API_KEY, но не указаны AUTH_TYPE и API_FORMAT,
@@ -108,8 +147,83 @@ func loadConfig() serverConfig {
 	return cfg
 }
 
+// loadKnowledgeConfig собирает настройки базы знаний и разрешает параметры эмбеддера.
+func loadKnowledgeConfig(agentCfg agent.Config) knowledgeConfig {
+	format := strings.ToLower(strings.TrimSpace(getEnvOrDefault("EMBED_API_FORMAT", defaultEmbedAPIFormat)))
+	if format != "ollama" {
+		format = "openai"
+	}
+
+	url := strings.TrimSpace(os.Getenv("EMBED_API_URL"))
+	model := strings.TrimSpace(os.Getenv("EMBED_MODEL"))
+
+	if format == "ollama" {
+		if url == "" {
+			url = getEnvOrDefault("OLLAMA_URL", defaultOllamaURL)
+		}
+		url = strings.TrimRight(url, "/")
+		if model == "" {
+			model = getEnvOrDefault("OLLAMA_EMBED_MODEL", defaultOllamaEmbedModel)
+		}
+	} else {
+		if url == "" {
+			url = deriveEmbedURL(agentCfg.ExternalAPI)
+		}
+		if model == "" {
+			model = defaultOpenAIEmbedModel
+		}
+	}
+
+	key := os.Getenv("EMBED_API_KEY")
+	if key == "" {
+		key = agentCfg.APIKey
+	}
+
+	return knowledgeConfig{
+		IndexDBPath:    getEnvOrDefault("INDEX_DB_PATH", defaultIndexDBPath),
+		EmbedAPIFormat: format,
+		EmbedAPIURL:    url,
+		EmbedAPIKey:    key,
+		EmbedModel:     model,
+		EmbedBatch:     parseIntEnv("EMBED_BATCH", defaultEmbedBatch),
+		ChunkSize:      parseIntEnv("CHUNK_SIZE", defaultChunkSize),
+		ChunkOverlap:   parseIntEnv("CHUNK_OVERLAP", defaultChunkOverlap),
+		ChunkMinSize:   parseIntEnv("CHUNK_MIN_SIZE", defaultChunkMinSize),
+		SearchTopK:     parseIntEnv("SEARCH_TOP_K", defaultSearchTopK),
+		MaxUploadBytes: int64(parseIntEnv("MAX_UPLOAD_MB", defaultMaxUploadMB)) * 1024 * 1024,
+	}
+}
+
+// deriveEmbedURL выводит URL эмбеддингов из URL chat/completions.
+func deriveEmbedURL(chatURL string) string {
+	chatURL = strings.TrimRight(strings.TrimSpace(chatURL), "/")
+	if i := strings.LastIndex(chatURL, "/chat/completions"); i >= 0 {
+		return chatURL[:i] + "/embeddings"
+	}
+	if strings.HasSuffix(chatURL, "/v1") {
+		return chatURL + "/embeddings"
+	}
+	return chatURL
+}
+
 func defaultDigestPrompt() string {
 	return "Ты блогер, который составляет чарт фильмов, собери популярные фильмы за последние сутки и сделай сводку"
+}
+
+func parseBoolEnv(key string, defaultValue bool) bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if v == "" {
+		return defaultValue
+	}
+	switch v {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		log.Printf("Предупреждение: не удалось распарсить %s=%q, используется значение по умолчанию %t", key, v, defaultValue)
+		return defaultValue
+	}
 }
 
 func parseIntEnv(key string, defaultValue int) int {

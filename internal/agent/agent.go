@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -17,21 +19,23 @@ import (
 //   - инструменты (ToolRegistry)
 //   - многошаговое планирование (step loop)
 type SimpleAgent struct {
-	config  Config
-	client  APIClient
-	history history.Store
-	memory  memory.Store
-	profile profile.Store
-	tools   ToolRegistry
+	config    Config
+	client    APIClient
+	history   history.Store
+	memory    memory.Store
+	profile   profile.Store
+	tools     ToolRegistry
+	knowledge KnowledgeRetriever
 }
 
 // NewSimpleAgent создаёт агента с переданным клиентом и конфигурацией.
 func NewSimpleAgent(cfg Config, client APIClient) *SimpleAgent {
 	return &SimpleAgent{
-		config:  cfg,
-		client:  client,
-		memory:  cfg.MemoryStore,
-		profile: cfg.ProfileStore,
+		config:    cfg,
+		client:    client,
+		memory:    cfg.MemoryStore,
+		profile:   cfg.ProfileStore,
+		knowledge: cfg.KnowledgeRetriever,
 	}
 }
 
@@ -56,6 +60,12 @@ func (a *SimpleAgent) WithProfile(p profile.Store) *SimpleAgent {
 // WithTools добавляет реестр инструментов.
 func (a *SimpleAgent) WithTools(t ToolRegistry) *SimpleAgent {
 	a.tools = t
+	return a
+}
+
+// WithKnowledge добавляет поиск по базе знаний проекта (RAG).
+func (a *SimpleAgent) WithKnowledge(k KnowledgeRetriever) *SimpleAgent {
+	a.knowledge = k
 	return a
 }
 
@@ -205,6 +215,9 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	}
 	invariantContext := formatInvariantsContext(invariants)
 
+	// Ищем релевантные фрагменты в базе знаний проекта (RAG), если включено.
+	knowledgeContext := a.retrieveKnowledgeContext(req, originalUserMessage)
+
 	// Добавляем facts в историю как системное сообщение, если используется стратегия facts.
 	messages := ctxResult.messages
 	if strategy == StrategyFacts && len(session.Facts) > 0 {
@@ -229,12 +242,12 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 
 	usedTools := workflowMode == WorkflowModeChat && a.tools != nil && a.config.APIFormat == "openai"
 	if usedTools {
-		llmResp, err = a.runWithTools(&session, llmReq, messages, userProfileContext, projectContext, invariantContext, workflowContext)
+		llmResp, err = a.runWithTools(&session, llmReq, messages, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext)
 		if err != nil {
 			return AgentResponse{}, err
 		}
 	} else {
-		onceResp, err := a.runOnce(llmReq, messages, nil, userProfileContext, projectContext, invariantContext, workflowContext)
+		onceResp, err := a.runOnce(llmReq, messages, nil, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext)
 		if err != nil {
 			return AgentResponse{}, err
 		}
@@ -274,9 +287,60 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	return llmResp, nil
 }
 
+// retrieveKnowledgeContext выполняет RAG-поиск по базе знаний проекта и
+// форматирует найденные фрагменты в системное сообщение. Ошибки поиска не
+// прерывают чат: при недоступности базы знаний ответ строится без фрагментов.
+func (a *SimpleAgent) retrieveKnowledgeContext(req AgentRequest, query string) string {
+	if a.knowledge == nil || req.ProjectID == "" || strings.TrimSpace(query) == "" {
+		return ""
+	}
+	if !a.ragEnabled(req) {
+		return ""
+	}
+
+	ctx := req.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	chunks, err := a.knowledge.Retrieve(ctx, req.ProjectID, a.ragStrategy(req), query, a.ragTopK(req))
+	if err != nil {
+		log.Printf("RAG: не удалось получить фрагменты базы знаний проекта %q: %v", req.ProjectID, err)
+		return ""
+	}
+	return formatKnowledgeContext(chunks)
+}
+
+func (a *SimpleAgent) ragEnabled(req AgentRequest) bool {
+	if req.RAGEnabled != nil {
+		return *req.RAGEnabled
+	}
+	return a.config.RAGEnabled
+}
+
+func (a *SimpleAgent) ragStrategy(req AgentRequest) string {
+	if s := strings.TrimSpace(req.RAGStrategy); s != "" {
+		return s
+	}
+	if s := strings.TrimSpace(a.config.RAGStrategy); s != "" {
+		return s
+	}
+	return "structure"
+}
+
+func (a *SimpleAgent) ragTopK(req AgentRequest) int {
+	if req.RAGTopK > 0 {
+		return req.RAGTopK
+	}
+	if a.config.RAGTopK > 0 {
+		return a.config.RAGTopK
+	}
+	return 5
+}
+
 // runOnce выполняет один вызов LLM и возвращает полный ответ, включая tool_calls.
-func (a *SimpleAgent) runOnce(req AgentRequest, history []history.Message, tools ToolRegistry, userProfileContext, projectContext, invariantContext, workflowContext string) (LLMResponse, error) {
-	payload, err := buildPayload(a.config, req, history, tools, userProfileContext, projectContext, invariantContext, workflowContext)
+func (a *SimpleAgent) runOnce(req AgentRequest, history []history.Message, tools ToolRegistry, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext string) (LLMResponse, error) {
+	payload, err := buildPayload(a.config, req, history, tools, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext)
 	if err != nil {
 		return LLMResponse{}, err
 	}
@@ -291,7 +355,7 @@ func (a *SimpleAgent) runOnce(req AgentRequest, history []history.Message, tools
 
 // runWithTools выполняет ReAct-цикл вызова инструментов в режиме chat.
 // Сообщения с tool_calls и результаты сохраняются в историю сессии.
-func (a *SimpleAgent) runWithTools(session *history.Session, req AgentRequest, baseMessages []history.Message, userProfileContext, projectContext, invariantContext, workflowContext string) (AgentResponse, error) {
+func (a *SimpleAgent) runWithTools(session *history.Session, req AgentRequest, baseMessages []history.Message, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext string) (AgentResponse, error) {
 	const maxIterations = 10
 
 	branch := session.Branches[session.ActiveBranch]
@@ -302,7 +366,7 @@ func (a *SimpleAgent) runWithTools(session *history.Session, req AgentRequest, b
 
 	for i := 0; i < maxIterations; i++ {
 		conversation := append(baseMessages, turnMessages...)
-		llmResp, err := a.runOnce(req, conversation, a.tools, userProfileContext, projectContext, invariantContext, workflowContext)
+		llmResp, err := a.runOnce(req, conversation, a.tools, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext)
 		if err != nil {
 			return AgentResponse{}, err
 		}

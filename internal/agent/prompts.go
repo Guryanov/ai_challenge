@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"fmt"
 	"strings"
 
 	"ai-chat/internal/history"
@@ -28,7 +29,30 @@ func formatUserProfileContext(p profile.Profile) string {
 	return "Профиль пользователя:\n" + strings.TrimSpace(p.Description)
 }
 
-func buildMessages(cfg Config, req AgentRequest, history []history.Message, userProfileContext, projectContext, invariantContext, workflowContext string) []map[string]any {
+// formatKnowledgeContext форматирует найденные в базе знаний фрагменты
+// в системное сообщение с указанием источника.
+func formatKnowledgeContext(chunks []RetrievedChunk) string {
+	if len(chunks) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("Релевантные фрагменты из базы знаний проекта. ")
+	b.WriteString("Используй их для ответа и указывай источник (файл и раздел). ")
+	b.WriteString("Если ответа во фрагментах нет, скажи об этом и не выдумывай.\n")
+	for i, c := range chunks {
+		b.WriteString(fmt.Sprintf("\n[%d] %s", i+1, c.Path))
+		if c.Section != "" {
+			b.WriteString(" — " + c.Section)
+		}
+		b.WriteString("\n")
+		b.WriteString(strings.TrimSpace(c.Text))
+		b.WriteString("\n")
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func buildMessages(cfg Config, req AgentRequest, history []history.Message, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext string) []map[string]any {
 	var messages []map[string]any
 
 	systemContent := buildSystemPrompt(cfg, req.Role)
@@ -46,6 +70,10 @@ func buildMessages(cfg Config, req AgentRequest, history []history.Message, user
 
 	if projectContext != "" {
 		messages = append(messages, map[string]any{"role": "system", "content": projectContext})
+	}
+
+	if knowledgeContext != "" {
+		messages = append(messages, map[string]any{"role": "system", "content": knowledgeContext})
 	}
 
 	if workflowContext != "" {

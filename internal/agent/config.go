@@ -20,4 +20,8 @@ type Config struct {
 	SummaryMaxTokens         int
 	MemoryStore              memory.Store
 	ProfileStore             profile.Store
+	KnowledgeRetriever       KnowledgeRetriever
+	RAGEnabled               bool
+	RAGStrategy              string
+	RAGTopK                  int
 }

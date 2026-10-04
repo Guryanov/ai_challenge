@@ -2,6 +2,7 @@ package main
 
 import (
 	"ai-chat/internal/history"
+	"ai-chat/internal/knowledge"
 	"ai-chat/internal/memory"
 )
 
@@ -20,6 +21,9 @@ type chatRequest struct {
 	Temperature     *float64          `json:"temperature"`
 	MaxTokens       *int              `json:"max_tokens"`
 	StopSequence    string            `json:"stop_sequence"`
+	RAGEnabled      *bool             `json:"rag_enabled"`
+	RAGStrategy     string            `json:"rag_strategy"`
+	RAGTopK         int               `json:"rag_top_k"`
 }
 
 // chatResponse — HTTP-ответ фронтенду.
@@ -60,4 +64,84 @@ type digestResponse struct {
 	Content     string `json:"content,omitempty"`
 	GeneratedAt string `json:"generated_at,omitempty"`
 	Error       string `json:"error,omitempty"`
+}
+
+// kbFile — загруженный файл базы знаний.
+type kbFile struct {
+	Path      string `json:"path"`
+	Name      string `json:"name"`
+	SizeBytes int    `json:"size_bytes"`
+	SHA256    string `json:"sha256"`
+	Indexed   bool   `json:"indexed"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+// kbFilesResponse — список файлов базы знаний.
+type kbFilesResponse struct {
+	Files []kbFile `json:"files"`
+}
+
+// kbIndexRequest — запрос индексации файлов проекта.
+type kbIndexRequest struct {
+	ProjectID string `json:"project_id"`
+	Strategy  string `json:"strategy"`
+}
+
+// kbIndexResponse — результаты индексации.
+type kbIndexResponse struct {
+	Runs []knowledge.IndexRun `json:"runs"`
+}
+
+// kbSearchRequest — запрос поиска по индексу.
+type kbSearchRequest struct {
+	ProjectID string `json:"project_id"`
+	Strategy  string `json:"strategy"`
+	Query     string `json:"query"`
+	K         int    `json:"k"`
+}
+
+// kbSearchResult — результат поиска.
+type kbSearchResult struct {
+	Path    string  `json:"path"`
+	Name    string  `json:"name"`
+	Section string  `json:"section"`
+	ChunkID string  `json:"chunk_id"`
+	Score   float64 `json:"score"`
+	Text    string  `json:"text"`
+}
+
+// kbSearchResponse — результаты поиска.
+type kbSearchResponse struct {
+	Results []kbSearchResult `json:"results"`
+}
+
+// kbQueryRequest — создание тест-запроса.
+type kbQueryRequest struct {
+	ProjectID       string `json:"project_id"`
+	Text            string `json:"text"`
+	ExpectedPath    string `json:"expected_path"`
+	ExpectedSection string `json:"expected_section"`
+}
+
+// kbQueriesResponse — список тест-запросов.
+type kbQueriesResponse struct {
+	Queries []knowledge.Query `json:"queries"`
+}
+
+// kbGenerateRequest — авто-генерация тест-запросов через LLM.
+type kbGenerateRequest struct {
+	ProjectID string `json:"project_id"`
+	Strategy  string `json:"strategy"`
+	N         int    `json:"n"`
+}
+
+// kbBenchmarkRequest — запуск оценки стратегий.
+type kbBenchmarkRequest struct {
+	ProjectID string `json:"project_id"`
+	K         int    `json:"k"`
+}
+
+// kbBenchmarkResponse — результаты оценки стратегий.
+type kbBenchmarkResponse struct {
+	Runs []knowledge.BenchmarkRun `json:"runs"`
 }
