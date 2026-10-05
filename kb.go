@@ -84,6 +84,7 @@ func (r kbRetriever) Retrieve(ctx context.Context, projectID string, opts agent.
 			Path:    s.Path,
 			Name:    s.Name,
 			Section: s.Section,
+			ChunkID: s.ChunkID,
 			Score:   s.Score,
 			Text:    s.Text,
 		})

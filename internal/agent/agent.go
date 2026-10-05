@@ -216,7 +216,29 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	invariantContext := formatInvariantsContext(invariants)
 
 	// Ищем релевантные фрагменты в базе знаний проекта (RAG), если включено.
-	knowledgeContext := a.retrieveKnowledgeContext(req, originalUserMessage)
+	knowledge := a.retrieveKnowledgeContext(req, originalUserMessage)
+	knowledgeContext := knowledge.context
+
+	// В режиме chat при отсутствии релевантных фрагментов (ниже порога или
+	// ничего не найдено) ассистент обязан сказать «не знаю» и попросить
+	// уточнение — детерминированно, без вызова LLM.
+	if workflowMode == WorkflowModeChat && knowledge.applied && len(knowledge.chunks) == 0 && a.ragMode() != "none" {
+		refusal := AgentResponse{Content: ragRefusalMessage}
+		sessionTotal, err := a.saveHistory(req.SessionID, &session, originalUserMessage, refusal)
+		if err != nil {
+			return AgentResponse{}, err
+		}
+		refusal.SessionTotalTokens = sessionTotal
+		refusal.ActiveBranch = session.ActiveBranch
+		refusal.Branches = branchNames(session.Branches)
+		refusal.Facts = session.Facts
+		refusal.ProjectID = req.ProjectID
+		refusal.ProfileID = req.ProfileID
+		refusal.TaskStage = session.TaskStage
+		refusal.TaskStatus = session.TaskStatus
+		refusal.TaskContext = session.TaskContext
+		return refusal, nil
+	}
 
 	// Добавляем facts в историю как системное сообщение, если используется стратегия facts.
 	messages := ctxResult.messages
@@ -256,6 +278,8 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 
 	llmResp.Duration = time.Since(mainStart)
 	llmResp.Compressed = strategy == StrategySummary && len(session.Branches[session.ActiveBranch].Messages) > 2
+	llmResp.Sources = toSourceRefs(knowledge.chunks)
+	llmResp.RAGUsed = len(knowledge.chunks) > 0
 
 	// В режиме workflow сохраняем результат этапа в контексте задачи.
 	if workflowMode == WorkflowModeWorkflow {
@@ -287,15 +311,24 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	return llmResp, nil
 }
 
+// knowledgeResult — результат RAG-поиска для одного запроса.
+// applied означает, что RAG применим (включён, есть проект и запрос) и поиск
+// прошёл без ошибок; chunks — фрагменты, прошедшие порог релевантности.
+type knowledgeResult struct {
+	context string
+	chunks  []RetrievedChunk
+	applied bool
+}
+
 // retrieveKnowledgeContext выполняет RAG-поиск по базе знаний проекта и
 // форматирует найденные фрагменты в системное сообщение. Ошибки поиска не
 // прерывают чат: при недоступности базы знаний ответ строится без фрагментов.
-func (a *SimpleAgent) retrieveKnowledgeContext(req AgentRequest, query string) string {
+func (a *SimpleAgent) retrieveKnowledgeContext(req AgentRequest, query string) knowledgeResult {
 	if a.knowledge == nil || req.ProjectID == "" || strings.TrimSpace(query) == "" {
-		return ""
+		return knowledgeResult{}
 	}
 	if !a.ragEnabled(req) {
-		return ""
+		return knowledgeResult{}
 	}
 
 	ctx := req.Context
@@ -313,18 +346,22 @@ func (a *SimpleAgent) retrieveKnowledgeContext(req AgentRequest, query string) s
 	})
 	if err != nil {
 		log.Printf("RAG: не удалось получить фрагменты базы знаний проекта %q: %v", req.ProjectID, err)
-		return ""
+		return knowledgeResult{}
 	}
 	if len(chunks) == 0 {
-		return knowledgeEmptyNote
+		return knowledgeResult{context: knowledgeEmptyNote, applied: true}
 	}
-	return formatKnowledgeContext(chunks)
+	return knowledgeResult{context: formatKnowledgeContext(chunks), chunks: chunks, applied: true}
 }
 
 // knowledgeEmptyNote сообщает LLM, что в базе знаний нет релевантных
 // фрагментов, чтобы модель не выдумывала факты «из базы».
 const knowledgeEmptyNote = "В базе знаний проекта не найдено релевантных фрагментов по этому запросу. " +
-	"Не выдумывай факты из базы знаний; если данных нет, прямо скажи об этом."
+	"Не выдумывай факты из базы знаний; если данных нет, прямо скажи «Не знаю» и попроси уточнить вопрос."
+
+// ragRefusalMessage — детерминированный ответ при релевантности ниже порога.
+const ragRefusalMessage = "Не знаю. В базе знаний не нашлось достаточно релевантной информации по этому вопросу. " +
+	"Уточните, пожалуйста, вопрос или добавьте нужные документы."
 
 func (a *SimpleAgent) ragEnabled(req AgentRequest) bool {
 	if req.RAGEnabled != nil {
@@ -366,6 +403,11 @@ func (a *SimpleAgent) ragThreshold(req AgentRequest) *float64 {
 	}
 	threshold := a.config.RAGThreshold
 	return &threshold
+}
+
+// ragMode возвращает режим второго этапа retrieval.
+func (a *SimpleAgent) ragMode() string {
+	return strings.TrimSpace(a.config.RAGMode)
 }
 
 // runOnce выполняет один вызов LLM и возвращает полный ответ, включая tool_calls.

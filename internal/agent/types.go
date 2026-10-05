@@ -77,6 +77,8 @@ type AgentResponse struct {
 	TaskStatus         string
 	TaskContext        history.TaskContext
 	Duration           time.Duration
+	Sources            []SourceRef
+	RAGUsed            bool
 }
 
 // RetrievedChunk — фрагмент, найденный в базе знаний проекта.
@@ -84,8 +86,19 @@ type RetrievedChunk struct {
 	Path    string
 	Name    string
 	Section string
+	ChunkID string
 	Score   float64
 	Text    string
+}
+
+// SourceRef — источник и цитата, использованные при RAG-ответе.
+type SourceRef struct {
+	Path    string  `json:"path"`
+	Name    string  `json:"name,omitempty"`
+	Section string  `json:"section,omitempty"`
+	ChunkID string  `json:"chunk_id,omitempty"`
+	Score   float64 `json:"score"`
+	Quote   string  `json:"quote,omitempty"`
 }
 
 // KnowledgeRetriever ищет релевантные фрагменты базы знаний проекта.

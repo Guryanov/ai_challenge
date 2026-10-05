@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ai-chat/internal/agent"
 	"ai-chat/internal/history"
 	"ai-chat/internal/knowledge"
 	"ai-chat/internal/memory"
@@ -47,6 +48,8 @@ type chatResponse struct {
 	TaskStage          string              `json:"task_stage,omitempty"`
 	TaskStatus         string              `json:"task_status,omitempty"`
 	TaskContext        history.TaskContext `json:"task_context,omitempty"`
+	Sources            []agent.SourceRef   `json:"sources,omitempty"`
+	RAGUsed            bool                `json:"rag_used,omitempty"`
 	Error              string              `json:"error,omitempty"`
 }
 

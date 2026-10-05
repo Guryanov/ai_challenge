@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"ai-chat/internal/history"
 	"ai-chat/internal/profile"
@@ -38,18 +39,81 @@ func formatKnowledgeContext(chunks []RetrievedChunk) string {
 
 	var b strings.Builder
 	b.WriteString("Релевантные фрагменты из базы знаний проекта. ")
-	b.WriteString("Используй их для ответа и указывай источник (файл и раздел). ")
+	b.WriteString("Используй их для ответа; проверяемый список источников и цитат формируется автоматически, поэтому не придумывай источники сам. ")
 	b.WriteString("Если ответа во фрагментах нет, скажи об этом и не выдумывай.\n")
 	for i, c := range chunks {
 		b.WriteString(fmt.Sprintf("\n[%d] %s", i+1, c.Path))
 		if c.Section != "" {
 			b.WriteString(" — " + c.Section)
 		}
+		if c.ChunkID != "" {
+			b.WriteString(" (chunk_id: " + c.ChunkID + ")")
+		}
 		b.WriteString("\n")
 		b.WriteString(strings.TrimSpace(c.Text))
 		b.WriteString("\n")
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// sourceQuoteLimit — максимальная длина цитаты в рунах.
+const sourceQuoteLimit = 300
+
+// quoteExcerpt возвращает дословный фрагмент текста, усечённый до лимита.
+func quoteExcerpt(text string) string {
+	trimmed := strings.TrimSpace(text)
+	if utf8.RuneCountInString(trimmed) <= sourceQuoteLimit {
+		return trimmed
+	}
+	return strings.TrimSpace(string([]rune(trimmed)[:sourceQuoteLimit])) + "…"
+}
+
+// FormatSourcesBlock формирует детерминированный блок источников и цитат,
+// который дописывается к текстовому ответу. Пустой список даёт пустую строку.
+func FormatSourcesBlock(sources []SourceRef) string {
+	if len(sources) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("\n\n---\nИсточники:\n")
+	for i, s := range sources {
+		source := s.Path
+		if source == "" {
+			source = s.Name
+		}
+		b.WriteString(fmt.Sprintf("%d. %s", i+1, source))
+		if s.Section != "" {
+			b.WriteString(" — " + s.Section)
+		}
+		if s.ChunkID != "" {
+			b.WriteString(" (chunk_id: " + s.ChunkID + ")")
+		}
+		b.WriteString("\n")
+		if q := quoteExcerpt(s.Quote); q != "" {
+			b.WriteString("   «" + q + "»\n")
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// toSourceRefs преобразует найденные чанки в источники с цитатами.
+func toSourceRefs(chunks []RetrievedChunk) []SourceRef {
+	if len(chunks) == 0 {
+		return nil
+	}
+	sources := make([]SourceRef, 0, len(chunks))
+	for _, c := range chunks {
+		sources = append(sources, SourceRef{
+			Path:    c.Path,
+			Name:    c.Name,
+			Section: c.Section,
+			ChunkID: c.ChunkID,
+			Score:   c.Score,
+			Quote:   quoteExcerpt(c.Text),
+		})
+	}
+	return sources
 }
 
 func buildMessages(cfg Config, req AgentRequest, history []history.Message, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext string) []map[string]any {

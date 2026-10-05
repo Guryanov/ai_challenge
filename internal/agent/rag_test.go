@@ -137,22 +137,134 @@ func TestRunRetrievalErrorDoesNotFailChat(t *testing.T) {
 	}
 }
 
-func TestRunAddsEmptyKnowledgeNote(t *testing.T) {
+func TestRunRefusesWhenNoRelevantChunks(t *testing.T) {
 	client := &capturingClient{}
 	retriever := &fakeRetriever{}
 	cfg := Config{APIFormat: "openai", Model: "test", RAGEnabled: true, RAGThreshold: 0.35, RAGMode: "threshold"}
 	a := NewSimpleAgent(cfg, client).WithKnowledge(retriever)
 
-	if _, err := a.Run(AgentRequest{
+	resp, err := a.Run(AgentRequest{
 		Message:    "вопрос",
 		ProjectID:  "p",
 		SessionID:  "s-empty",
 		RAGEnabled: boolPtr(true),
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.Contains(string(client.payloads[0]), "не найдено релевантных фрагментов") {
-		t.Fatalf("expected empty-knowledge note in payload:\n%s", client.payloads[0])
+	if len(client.payloads) != 0 {
+		t.Fatalf("LLM must not be called on low relevance, got %d calls", len(client.payloads))
+	}
+	if !strings.Contains(resp.Content, "Не знаю") {
+		t.Fatalf("expected refusal message, got %q", resp.Content)
+	}
+	if !strings.Contains(resp.Content, "Уточните") {
+		t.Fatalf("expected clarification request, got %q", resp.Content)
+	}
+	if resp.RAGUsed || len(resp.Sources) != 0 {
+		t.Fatalf("refusal must not carry sources: used=%v sources=%d", resp.RAGUsed, len(resp.Sources))
+	}
+}
+
+func TestRunAddsSourcesAndCitations(t *testing.T) {
+	client := &capturingClient{}
+	retriever := &fakeRetriever{chunks: []RetrievedChunk{
+		{Path: "docs/guide.md", Name: "guide.md", Section: "Введение", ChunkID: "abc123", Score: 0.82, Text: "Уникальный факт из базы знаний"},
+	}}
+	cfg := Config{APIFormat: "openai", Model: "test", RAGEnabled: true, RAGStrategy: "structure", RAGTopK: 3, RAGMode: "threshold"}
+	a := NewSimpleAgent(cfg, client).WithKnowledge(retriever)
+
+	resp, err := a.Run(AgentRequest{
+		Message:    "что такое X?",
+		ProjectID:  "p",
+		SessionID:  "s-src",
+		RAGEnabled: boolPtr(true),
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !resp.RAGUsed {
+		t.Fatal("expected RAGUsed=true")
+	}
+	if len(resp.Sources) != 1 {
+		t.Fatalf("sources = %d, want 1", len(resp.Sources))
+	}
+	src := resp.Sources[0]
+	if src.Path != "docs/guide.md" || src.Section != "Введение" || src.ChunkID != "abc123" {
+		t.Fatalf("unexpected source: %+v", src)
+	}
+	if src.Quote != "Уникальный факт из базы знаний" {
+		t.Fatalf("unexpected quote: %q", src.Quote)
+	}
+	// Чистый ответ не должен содержать блок источников — он добавляется на HTTP-слое.
+	if strings.Contains(resp.Content, "Источники:") {
+		t.Fatalf("agent content must stay clean, got %q", resp.Content)
+	}
+}
+
+func TestRunWorkflowDoesNotRefuse(t *testing.T) {
+	client := &capturingClient{}
+	retriever := &fakeRetriever{}
+	cfg := Config{APIFormat: "openai", Model: "test", RAGEnabled: true, RAGThreshold: 0.35, RAGMode: "threshold"}
+	a := NewSimpleAgent(cfg, client).WithKnowledge(retriever)
+
+	resp, err := a.Run(AgentRequest{
+		Message:      "вопрос",
+		ProjectID:    "p",
+		SessionID:    "s-wf",
+		RAGEnabled:   boolPtr(true),
+		WorkflowMode: WorkflowModeWorkflow,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(client.payloads) == 0 {
+		t.Fatal("workflow must still call LLM, refusal is chat-only")
+	}
+	if resp.Content != "ok" {
+		t.Fatalf("content = %q, want ok", resp.Content)
+	}
+}
+
+func TestRunRetrievalErrorDoesNotRefuse(t *testing.T) {
+	client := &capturingClient{}
+	retriever := &fakeRetriever{err: errors.New("embedder недоступен")}
+	cfg := Config{APIFormat: "openai", Model: "test", RAGEnabled: true}
+	a := NewSimpleAgent(cfg, client).WithKnowledge(retriever)
+
+	resp, err := a.Run(AgentRequest{
+		Message:    "вопрос",
+		ProjectID:  "p",
+		SessionID:  "s-err",
+		RAGEnabled: boolPtr(true),
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(client.payloads) == 0 {
+		t.Fatal("retrieval error must fall back to LLM, not refusal")
+	}
+	if resp.Content == ragRefusalMessage {
+		t.Fatal("retrieval error must not produce refusal")
+	}
+}
+
+func TestFormatSourcesBlock(t *testing.T) {
+	if got := FormatSourcesBlock(nil); got != "" {
+		t.Fatalf("empty sources must produce empty block, got %q", got)
+	}
+
+	block := FormatSourcesBlock([]SourceRef{
+		{Path: "docs/a.md", Section: "S1", ChunkID: "c1", Quote: "первая цитата"},
+		{Path: "b.md", ChunkID: "c2", Quote: strings.Repeat("я", 400)},
+	})
+	for _, want := range []string{"Источники:", "docs/a.md", "S1", "chunk_id: c1", "первая цитата", "b.md", "chunk_id: c2", "…"} {
+		if !strings.Contains(block, want) {
+			t.Errorf("expected block to contain %q, got:\n%s", want, block)
+		}
+	}
+	if strings.Contains(block, strings.Repeat("я", 400)) {
+		t.Error("long quote must be truncated")
 	}
 }
 

@@ -145,7 +145,7 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 
 		resp := chatResponse{
 			User:               req.Message,
-			Response:           result.Content,
+			Response:           strings.TrimSpace(result.Content) + agent.FormatSourcesBlock(result.Sources),
 			FinishReason:       result.FinishReason,
 			DurationMs:         result.Duration.Milliseconds(),
 			PromptTokens:       result.PromptTokens,
@@ -161,6 +161,8 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			TaskStage:          result.TaskStage,
 			TaskStatus:         result.TaskStatus,
 			TaskContext:        result.TaskContext,
+			Sources:            result.Sources,
+			RAGUsed:            result.RAGUsed,
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -713,7 +715,7 @@ func handleTaskCancel(a agent.Agent) http.HandlerFunc {
 func writeChatResponse(w http.ResponseWriter, userMessage string, result agent.AgentResponse) {
 	resp := chatResponse{
 		User:               userMessage,
-		Response:           result.Content,
+		Response:           strings.TrimSpace(result.Content) + agent.FormatSourcesBlock(result.Sources),
 		FinishReason:       result.FinishReason,
 		DurationMs:         result.Duration.Milliseconds(),
 		PromptTokens:       result.PromptTokens,
@@ -729,6 +731,8 @@ func writeChatResponse(w http.ResponseWriter, userMessage string, result agent.A
 		TaskStage:          result.TaskStage,
 		TaskStatus:         result.TaskStatus,
 		TaskContext:        result.TaskContext,
+		Sources:            result.Sources,
+		RAGUsed:            result.RAGUsed,
 	}
 
 	w.WriteHeader(http.StatusOK)
