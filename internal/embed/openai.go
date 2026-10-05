@@ -147,7 +147,7 @@ func (c *OpenAIClient) embedBatch(ctx context.Context, texts []string) ([][]floa
 
 	out := make([][]float32, len(parsed.Data))
 	for i, item := range parsed.Data {
-		out[i] = item.Embedding
+		out[i] = normalize(item.Embedding)
 	}
 	return out, nil
 }

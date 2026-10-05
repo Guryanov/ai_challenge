@@ -134,6 +134,8 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			RAGEnabled:      req.RAGEnabled,
 			RAGStrategy:     req.RAGStrategy,
 			RAGTopK:         req.RAGTopK,
+			RAGCandidates:   req.RAGCandidates,
+			RAGThreshold:    req.RAGThreshold,
 		})
 		if err != nil {
 			log.Printf("Ошибка агента: %v", err)
@@ -947,7 +949,14 @@ func handleKBSearch(service *knowledge.Service) http.HandlerFunc {
 			return
 		}
 
-		scored, err := service.Search(r.Context(), req.ProjectID, req.Strategy, req.Query, req.K)
+		scored, err := service.Retrieve(r.Context(), req.ProjectID, knowledge.RetrieveOptions{
+			Strategy:   req.Strategy,
+			Query:      req.Query,
+			Candidates: req.Candidates,
+			TopK:       req.K,
+			Mode:       req.Mode,
+			Threshold:  req.Threshold,
+		})
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -1102,7 +1111,12 @@ func handleKBBenchmark(service *knowledge.Service) http.HandlerFunc {
 		}
 		defer r.Body.Close()
 
-		runs, err := service.Benchmark(r.Context(), req.ProjectID, req.K)
+		runs, err := service.Benchmark(r.Context(), req.ProjectID, knowledge.RetrieveOptions{
+			TopK:       req.K,
+			Candidates: req.Candidates,
+			Mode:       req.Mode,
+			Threshold:  req.Threshold,
+		})
 		if err != nil {
 			writeError(w, http.StatusBadGateway, err.Error())
 			return

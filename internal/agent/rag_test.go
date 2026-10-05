@@ -32,13 +32,15 @@ func (c *capturingClient) Call(payload []byte) ([]byte, error) {
 }
 
 type fakeRetriever struct {
-	calls  int
-	chunks []RetrievedChunk
-	err    error
+	calls    int
+	chunks   []RetrievedChunk
+	err      error
+	lastOpts RetrieveOptions
 }
 
-func (f *fakeRetriever) Retrieve(_ context.Context, _, _, _ string, _ int) ([]RetrievedChunk, error) {
+func (f *fakeRetriever) Retrieve(_ context.Context, _ string, opts RetrieveOptions) ([]RetrievedChunk, error) {
 	f.calls++
+	f.lastOpts = opts
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -132,6 +134,60 @@ func TestRunRetrievalErrorDoesNotFailChat(t *testing.T) {
 	}
 	if retriever.calls != 1 {
 		t.Fatalf("retriever called %d times, want 1", retriever.calls)
+	}
+}
+
+func TestRunAddsEmptyKnowledgeNote(t *testing.T) {
+	client := &capturingClient{}
+	retriever := &fakeRetriever{}
+	cfg := Config{APIFormat: "openai", Model: "test", RAGEnabled: true, RAGThreshold: 0.35, RAGMode: "threshold"}
+	a := NewSimpleAgent(cfg, client).WithKnowledge(retriever)
+
+	if _, err := a.Run(AgentRequest{
+		Message:    "вопрос",
+		ProjectID:  "p",
+		SessionID:  "s-empty",
+		RAGEnabled: boolPtr(true),
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(string(client.payloads[0]), "не найдено релевантных фрагментов") {
+		t.Fatalf("expected empty-knowledge note in payload:\n%s", client.payloads[0])
+	}
+}
+
+func TestRunPassesRetrieveOptions(t *testing.T) {
+	client := &capturingClient{}
+	retriever := &fakeRetriever{chunks: []RetrievedChunk{{Path: "a.md", Text: "текст"}}}
+	cfg := Config{
+		APIFormat: "openai", Model: "test", RAGEnabled: true,
+		RAGStrategy: "fixed", RAGTopK: 7, RAGCandidates: 30, RAGThreshold: 0.5, RAGMode: "threshold",
+	}
+	a := NewSimpleAgent(cfg, client).WithKnowledge(retriever)
+
+	threshold := 0.9
+	if _, err := a.Run(AgentRequest{
+		Message:       "запрос",
+		ProjectID:     "p",
+		SessionID:     "s-opts",
+		RAGEnabled:    boolPtr(true),
+		RAGStrategy:   "structure",
+		RAGTopK:       2,
+		RAGCandidates: 11,
+		RAGThreshold:  &threshold,
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	opts := retriever.lastOpts
+	if opts.Strategy != "structure" || opts.TopK != 2 || opts.Candidates != 11 || opts.Query != "запрос" {
+		t.Fatalf("unexpected options: %+v", opts)
+	}
+	if opts.Mode != "threshold" {
+		t.Fatalf("mode = %q, want threshold", opts.Mode)
+	}
+	if opts.Threshold == nil || *opts.Threshold != 0.9 {
+		t.Fatalf("threshold = %v, want 0.9", opts.Threshold)
 	}
 }
 

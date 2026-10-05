@@ -17,13 +17,42 @@ import (
 	"ai-chat/internal/embed"
 )
 
+// Значения второго этапа retrieval по умолчанию.
+const (
+	defaultCandidates      = 20
+	defaultTopK            = 5
+	defaultRerankThreshold = 0.35
+)
+
 // Config — параметры сервиса базы знаний.
 type Config struct {
-	ChunkSize    int
-	ChunkOverlap int
-	ChunkMinSize int
-	TopK         int
-	EmbedModel   string
+	ChunkSize       int
+	ChunkOverlap    int
+	ChunkMinSize    int
+	TopK            int
+	Candidates      int
+	RerankMode      string
+	RerankThreshold float64
+	EmbedModel      string
+}
+
+// RetrieveOptions — параметры одного retrieval-запроса.
+// Нулевые поля подставляются из Config.
+type RetrieveOptions struct {
+	Strategy   string
+	Query      string
+	Candidates int
+	TopK       int
+	Mode       string
+	Threshold  *float64
+}
+
+// retrieveParams — разрешённые параметры второго этапа.
+type retrieveParams struct {
+	candidates int
+	topK       int
+	mode       string
+	threshold  float64
 }
 
 // QueryGenerator генерирует тест-вопрос по тексту чанка (обычно через chat-LLM).
@@ -50,7 +79,16 @@ type Service struct {
 // NewService создаёт сервис базы знаний.
 func NewService(store *Store, embedder embed.Client, cfg Config, queryGen QueryGenerator) *Service {
 	if cfg.TopK <= 0 {
-		cfg.TopK = 5
+		cfg.TopK = defaultTopK
+	}
+	if cfg.Candidates <= 0 {
+		cfg.Candidates = defaultCandidates
+	}
+	if cfg.Candidates < cfg.TopK {
+		cfg.Candidates = cfg.TopK
+	}
+	if strings.TrimSpace(cfg.RerankMode) == "" {
+		cfg.RerankMode = RerankModeThreshold
 	}
 	return &Service{
 		store:     store,
@@ -283,23 +321,31 @@ func (s *Service) indexStrategy(ctx context.Context, projectID, strategy string,
 	return run, nil
 }
 
-// Search ищет top-K чанков по стратегии.
+// Search ищет top-K чанков по стратегии через общий retrieval-пайплайн.
+// Совместимая обёртка над Retrieve.
 func (s *Service) Search(ctx context.Context, projectID, strategy, queryText string, k int) ([]ScoredChunk, error) {
-	if strings.TrimSpace(queryText) == "" {
+	return s.Retrieve(ctx, projectID, RetrieveOptions{
+		Strategy: strategy,
+		Query:    queryText,
+		TopK:     k,
+	})
+}
+
+// Retrieve выполняет полный retrieval: векторный поиск кандидатов,
+// затем второй этап (порог/reranker) и обрезку до TopK.
+func (s *Service) Retrieve(ctx context.Context, projectID string, opts RetrieveOptions) ([]ScoredChunk, error) {
+	if strings.TrimSpace(opts.Query) == "" {
 		return nil, fmt.Errorf("поисковый запрос не может быть пустым")
 	}
-	strategy = normalizeStrategy(strategy)
+	strategy := normalizeStrategy(opts.Strategy)
 	if strategy == "" {
-		return nil, fmt.Errorf("неизвестная стратегия: %q", strategy)
+		return nil, fmt.Errorf("неизвестная стратегия: %q", opts.Strategy)
 	}
 	if s.embedder == nil {
 		return nil, fmt.Errorf("эмбеддер не настроен")
 	}
-	if k <= 0 {
-		k = s.cfg.TopK
-	}
 
-	vectors, err := s.embedder.Embed(ctx, []string{queryText})
+	vectors, err := s.embedder.Embed(ctx, []string{opts.Query})
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +357,54 @@ func (s *Service) Search(ctx context.Context, projectID, strategy, queryText str
 	if err != nil {
 		return nil, err
 	}
-	return SearchTopK(chunks, vectors[0], k), nil
+
+	return s.rank(chunks, vectors[0], opts.Query, s.resolveRankParams(opts.Candidates, opts.TopK, opts.Mode, opts.Threshold))
+}
+
+// rank применяет векторный поиск по кандидатам и второй этап (reranker).
+// Векторы чанков и запроса нормализуются, чтобы Score был косинусной близостью.
+func (s *Service) rank(chunks []StoredChunk, queryVec []float32, queryText string, p retrieveParams) ([]ScoredChunk, error) {
+	query := normalizeVec(queryVec)
+	for i := range chunks {
+		chunks[i].Vector = normalizeVec(chunks[i].Vector)
+	}
+
+	candidates := SearchTopK(chunks, query, p.candidates)
+	filtered, err := NewReranker(p.mode, p.threshold).Rerank(queryText, candidates)
+	if err != nil {
+		return nil, err
+	}
+	if p.topK > 0 && len(filtered) > p.topK {
+		filtered = filtered[:p.topK]
+	}
+	return filtered, nil
+}
+
+// resolveRankParams подставляет значения по умолчанию из Config.
+func (s *Service) resolveRankParams(candidates, topK int, mode string, threshold *float64) retrieveParams {
+	if candidates <= 0 {
+		candidates = s.cfg.Candidates
+	}
+	if candidates <= 0 {
+		candidates = defaultCandidates
+	}
+	if topK <= 0 {
+		topK = s.cfg.TopK
+	}
+	if topK <= 0 {
+		topK = defaultTopK
+	}
+	if candidates < topK {
+		candidates = topK
+	}
+	if strings.TrimSpace(mode) == "" {
+		mode = s.cfg.RerankMode
+	}
+	thr := s.cfg.RerankThreshold
+	if threshold != nil {
+		thr = *threshold
+	}
+	return retrieveParams{candidates: candidates, topK: topK, mode: mode, threshold: thr}
 }
 
 // GetMetrics возвращает structural-метрики, последние запуски индексации и бенчмарки.
@@ -425,10 +518,8 @@ func (s *Service) GenerateQueries(ctx context.Context, projectID, strategy strin
 }
 
 // Benchmark оценивает обе стратегии на тест-запросах и сохраняет результаты.
-func (s *Service) Benchmark(ctx context.Context, projectID string, k int) ([]BenchmarkRun, error) {
-	if k <= 0 {
-		k = s.cfg.TopK
-	}
+// Использует тот же retrieval-пайплайн, что и чат/поиск (кандидаты → порог → topK).
+func (s *Service) Benchmark(ctx context.Context, projectID string, opts RetrieveOptions) ([]BenchmarkRun, error) {
 	if s.embedder == nil {
 		return nil, fmt.Errorf("эмбеддер не настроен")
 	}
@@ -449,6 +540,12 @@ func (s *Service) Benchmark(ctx context.Context, projectID string, k int) ([]Ben
 	if err != nil {
 		return nil, err
 	}
+	for i := range queryVectors {
+		queryVectors[i] = normalizeVec(queryVectors[i])
+	}
+
+	p := s.resolveRankParams(opts.Candidates, opts.TopK, opts.Mode, opts.Threshold)
+	k := p.topK
 
 	var runs []BenchmarkRun
 	for _, strategy := range []string{chunk.StrategyFixed, chunk.StrategyStructure} {
@@ -462,7 +559,10 @@ func (s *Service) Benchmark(ctx context.Context, projectID string, k int) ([]Ben
 
 		results := make([]QueryResult, 0, len(queries))
 		for i, q := range queries {
-			top := SearchTopK(chunks, queryVectors[i], k)
+			top, err := s.rank(chunks, queryVectors[i], q.Text, p)
+			if err != nil {
+				return nil, err
+			}
 			first := 0
 			matches := 0
 			for rank, sc := range top {

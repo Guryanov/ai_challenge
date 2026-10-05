@@ -143,7 +143,7 @@ func TestServiceBenchmark(t *testing.T) {
 		t.Fatalf("AddQuery: %v", err)
 	}
 
-	runs, err := svc.Benchmark(ctx, "p", 1)
+	runs, err := svc.Benchmark(ctx, "p", RetrieveOptions{TopK: 1})
 	if err != nil {
 		t.Fatalf("Benchmark: %v", err)
 	}

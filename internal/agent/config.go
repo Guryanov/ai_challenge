@@ -24,4 +24,7 @@ type Config struct {
 	RAGEnabled               bool
 	RAGStrategy              string
 	RAGTopK                  int
+	RAGCandidates            int
+	RAGThreshold             float64
+	RAGMode                  string
 }

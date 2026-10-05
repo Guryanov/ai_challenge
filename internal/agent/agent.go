@@ -303,13 +303,28 @@ func (a *SimpleAgent) retrieveKnowledgeContext(req AgentRequest, query string) s
 		ctx = context.Background()
 	}
 
-	chunks, err := a.knowledge.Retrieve(ctx, req.ProjectID, a.ragStrategy(req), query, a.ragTopK(req))
+	chunks, err := a.knowledge.Retrieve(ctx, req.ProjectID, RetrieveOptions{
+		Strategy:   a.ragStrategy(req),
+		Query:      query,
+		Candidates: a.ragCandidates(req),
+		TopK:       a.ragTopK(req),
+		Mode:       a.config.RAGMode,
+		Threshold:  a.ragThreshold(req),
+	})
 	if err != nil {
 		log.Printf("RAG: не удалось получить фрагменты базы знаний проекта %q: %v", req.ProjectID, err)
 		return ""
 	}
+	if len(chunks) == 0 {
+		return knowledgeEmptyNote
+	}
 	return formatKnowledgeContext(chunks)
 }
+
+// knowledgeEmptyNote сообщает LLM, что в базе знаний нет релевантных
+// фрагментов, чтобы модель не выдумывала факты «из базы».
+const knowledgeEmptyNote = "В базе знаний проекта не найдено релевантных фрагментов по этому запросу. " +
+	"Не выдумывай факты из базы знаний; если данных нет, прямо скажи об этом."
 
 func (a *SimpleAgent) ragEnabled(req AgentRequest) bool {
 	if req.RAGEnabled != nil {
@@ -336,6 +351,21 @@ func (a *SimpleAgent) ragTopK(req AgentRequest) int {
 		return a.config.RAGTopK
 	}
 	return 5
+}
+
+func (a *SimpleAgent) ragCandidates(req AgentRequest) int {
+	if req.RAGCandidates > 0 {
+		return req.RAGCandidates
+	}
+	return a.config.RAGCandidates
+}
+
+func (a *SimpleAgent) ragThreshold(req AgentRequest) *float64 {
+	if req.RAGThreshold != nil {
+		return req.RAGThreshold
+	}
+	threshold := a.config.RAGThreshold
+	return &threshold
 }
 
 // runOnce выполняет один вызов LLM и возвращает полный ответ, включая tool_calls.

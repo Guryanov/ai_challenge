@@ -31,20 +31,26 @@ const (
 	defaultSearchTopK       = 5
 	defaultMaxUploadMB      = 10
 	defaultRAGStrategy      = "structure"
+	defaultSearchCandidates = 20
+	defaultRerankMode       = "threshold"
+	defaultRerankThreshold  = 0.35
 )
 
 type knowledgeConfig struct {
-	IndexDBPath    string
-	EmbedAPIFormat string
-	EmbedAPIURL    string
-	EmbedAPIKey    string
-	EmbedModel     string
-	EmbedBatch     int
-	ChunkSize      int
-	ChunkOverlap   int
-	ChunkMinSize   int
-	SearchTopK     int
-	MaxUploadBytes int64
+	IndexDBPath     string
+	EmbedAPIFormat  string
+	EmbedAPIURL     string
+	EmbedAPIKey     string
+	EmbedModel      string
+	EmbedBatch      int
+	ChunkSize       int
+	ChunkOverlap    int
+	ChunkMinSize    int
+	SearchTopK      int
+	Candidates      int
+	RerankMode      string
+	RerankThreshold float64
+	MaxUploadBytes  int64
 }
 
 type serverConfig struct {
@@ -120,6 +126,11 @@ func loadConfig() serverConfig {
 
 	cfg.Knowledge = loadKnowledgeConfig(cfg.Agent)
 
+	// RAG-параметры второго этапа берём из настроек базы знаний.
+	cfg.Agent.RAGCandidates = cfg.Knowledge.Candidates
+	cfg.Agent.RAGThreshold = cfg.Knowledge.RerankThreshold
+	cfg.Agent.RAGMode = cfg.Knowledge.RerankMode
+
 	if cfg.Knowledge.ChunkOverlap >= cfg.Knowledge.ChunkSize {
 		log.Printf("Предупреждение: CHUNK_OVERLAP (%d) >= CHUNK_SIZE (%d), используется overlap по умолчанию %d",
 			cfg.Knowledge.ChunkOverlap, cfg.Knowledge.ChunkSize, defaultChunkOverlap)
@@ -179,18 +190,41 @@ func loadKnowledgeConfig(agentCfg agent.Config) knowledgeConfig {
 		key = agentCfg.APIKey
 	}
 
+	topK := parseIntEnv("SEARCH_TOP_K", defaultSearchTopK)
+	candidates := parseIntEnv("SEARCH_CANDIDATES", defaultSearchCandidates)
+	if candidates < topK {
+		log.Printf("Предупреждение: SEARCH_CANDIDATES (%d) < SEARCH_TOP_K (%d), кандидаты подняты до top-K", candidates, topK)
+		candidates = topK
+	}
+
 	return knowledgeConfig{
-		IndexDBPath:    getEnvOrDefault("INDEX_DB_PATH", defaultIndexDBPath),
-		EmbedAPIFormat: format,
-		EmbedAPIURL:    url,
-		EmbedAPIKey:    key,
-		EmbedModel:     model,
-		EmbedBatch:     parseIntEnv("EMBED_BATCH", defaultEmbedBatch),
-		ChunkSize:      parseIntEnv("CHUNK_SIZE", defaultChunkSize),
-		ChunkOverlap:   parseIntEnv("CHUNK_OVERLAP", defaultChunkOverlap),
-		ChunkMinSize:   parseIntEnv("CHUNK_MIN_SIZE", defaultChunkMinSize),
-		SearchTopK:     parseIntEnv("SEARCH_TOP_K", defaultSearchTopK),
-		MaxUploadBytes: int64(parseIntEnv("MAX_UPLOAD_MB", defaultMaxUploadMB)) * 1024 * 1024,
+		IndexDBPath:     getEnvOrDefault("INDEX_DB_PATH", defaultIndexDBPath),
+		EmbedAPIFormat:  format,
+		EmbedAPIURL:     url,
+		EmbedAPIKey:     key,
+		EmbedModel:      model,
+		EmbedBatch:      parseIntEnv("EMBED_BATCH", defaultEmbedBatch),
+		ChunkSize:       parseIntEnv("CHUNK_SIZE", defaultChunkSize),
+		ChunkOverlap:    parseIntEnv("CHUNK_OVERLAP", defaultChunkOverlap),
+		ChunkMinSize:    parseIntEnv("CHUNK_MIN_SIZE", defaultChunkMinSize),
+		SearchTopK:      topK,
+		Candidates:      candidates,
+		RerankMode:      normalizeRerankMode(os.Getenv("RERANK_MODE")),
+		RerankThreshold: parseFloatEnv("RERANK_THRESHOLD", defaultRerankThreshold),
+		MaxUploadBytes:  int64(parseIntEnv("MAX_UPLOAD_MB", defaultMaxUploadMB)) * 1024 * 1024,
+	}
+}
+
+// normalizeRerankMode приводит RERANK_MODE к известному значению.
+func normalizeRerankMode(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "none":
+		return "none"
+	case "threshold", "":
+		return defaultRerankMode
+	default:
+		log.Printf("Предупреждение: неизвестный RERANK_MODE=%q, используется %s", raw, defaultRerankMode)
+		return defaultRerankMode
 	}
 }
 
@@ -224,6 +258,16 @@ func parseBoolEnv(key string, defaultValue bool) bool {
 		log.Printf("Предупреждение: не удалось распарсить %s=%q, используется значение по умолчанию %t", key, v, defaultValue)
 		return defaultValue
 	}
+}
+
+func parseFloatEnv(key string, defaultValue float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
+			return f
+		}
+		log.Printf("Предупреждение: не удалось распарсить %s=%q, используется значение по умолчанию %v", key, v, defaultValue)
+	}
+	return defaultValue
 }
 
 func parseIntEnv(key string, defaultValue int) int {

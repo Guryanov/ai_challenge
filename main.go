@@ -83,16 +83,20 @@ func main() {
 	log.Printf("Эмбеддинги: формат %s, модель %s, адрес %s", cfg.Knowledge.EmbedAPIFormat, cfg.Knowledge.EmbedModel, cfg.Knowledge.EmbedAPIURL)
 
 	kbService := knowledge.NewService(knowledgeStore, embedder, knowledge.Config{
-		ChunkSize:    cfg.Knowledge.ChunkSize,
-		ChunkOverlap: cfg.Knowledge.ChunkOverlap,
-		ChunkMinSize: cfg.Knowledge.ChunkMinSize,
-		TopK:         cfg.Knowledge.SearchTopK,
-		EmbedModel:   cfg.Knowledge.EmbedModel,
+		ChunkSize:       cfg.Knowledge.ChunkSize,
+		ChunkOverlap:    cfg.Knowledge.ChunkOverlap,
+		ChunkMinSize:    cfg.Knowledge.ChunkMinSize,
+		TopK:            cfg.Knowledge.SearchTopK,
+		Candidates:      cfg.Knowledge.Candidates,
+		RerankMode:      cfg.Knowledge.RerankMode,
+		RerankThreshold: cfg.Knowledge.RerankThreshold,
+		EmbedModel:      cfg.Knowledge.EmbedModel,
 	}, newQueryGenerator(cfg.Agent, httpClient))
 
 	// Подключаем базу знаний к агенту для RAG-ответов.
 	llmAgent.WithKnowledge(newKBRetriever(kbService))
-	log.Printf("RAG: включён=%t, стратегия=%s, top-K=%d", cfg.Agent.RAGEnabled, cfg.Agent.RAGStrategy, cfg.Agent.RAGTopK)
+	log.Printf("RAG: включён=%t, стратегия=%s, кандидаты=%d, top-K=%d, режим=%s, порог=%.2f",
+		cfg.Agent.RAGEnabled, cfg.Agent.RAGStrategy, cfg.Agent.RAGCandidates, cfg.Agent.RAGTopK, cfg.Agent.RAGMode, cfg.Agent.RAGThreshold)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", serveIndex)

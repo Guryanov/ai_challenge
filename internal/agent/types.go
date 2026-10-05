@@ -42,9 +42,21 @@ type AgentRequest struct {
 	MaxTokens       *int
 	StopSequence    string
 	Context         context.Context
-	RAGEnabled      *bool  // nil — использовать значение по умолчанию из конфигурации
-	RAGStrategy     string // "fixed" | "structure"; пусто — значение по умолчанию
-	RAGTopK         int    // <= 0 — значение по умолчанию
+	RAGEnabled      *bool    // nil — использовать значение по умолчанию из конфигурации
+	RAGStrategy     string   // "fixed" | "structure"; пусто — значение по умолчанию
+	RAGTopK         int      // <= 0 — значение по умолчанию
+	RAGCandidates   int      // кандидатов до фильтра; <= 0 — значение по умолчанию
+	RAGThreshold    *float64 // порог cosine; nil — значение по умолчанию
+}
+
+// RetrieveOptions — параметры RAG-поиска, передаваемые ретриверу.
+type RetrieveOptions struct {
+	Strategy   string
+	Query      string
+	Candidates int
+	TopK       int
+	Mode       string
+	Threshold  *float64
 }
 
 // AgentResponse — ответ агента.
@@ -78,7 +90,7 @@ type RetrievedChunk struct {
 
 // KnowledgeRetriever ищет релевантные фрагменты базы знаний проекта.
 type KnowledgeRetriever interface {
-	Retrieve(ctx context.Context, projectID, strategy, query string, k int) ([]RetrievedChunk, error)
+	Retrieve(ctx context.Context, projectID string, opts RetrieveOptions) ([]RetrievedChunk, error)
 }
 
 // Agent — интерфейс LLM-агента.

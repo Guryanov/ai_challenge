@@ -66,8 +66,15 @@ func newKBRetriever(service *knowledge.Service) kbRetriever {
 }
 
 // Retrieve ищет top-K чанков проекта для использования в ответе агента.
-func (r kbRetriever) Retrieve(ctx context.Context, projectID, strategy, query string, k int) ([]agent.RetrievedChunk, error) {
-	scored, err := r.service.Search(ctx, projectID, strategy, query, k)
+func (r kbRetriever) Retrieve(ctx context.Context, projectID string, opts agent.RetrieveOptions) ([]agent.RetrievedChunk, error) {
+	scored, err := r.service.Retrieve(ctx, projectID, knowledge.RetrieveOptions{
+		Strategy:   opts.Strategy,
+		Query:      opts.Query,
+		Candidates: opts.Candidates,
+		TopK:       opts.TopK,
+		Mode:       opts.Mode,
+		Threshold:  opts.Threshold,
+	})
 	if err != nil {
 		return nil, err
 	}

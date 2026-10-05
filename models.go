@@ -24,6 +24,8 @@ type chatRequest struct {
 	RAGEnabled      *bool             `json:"rag_enabled"`
 	RAGStrategy     string            `json:"rag_strategy"`
 	RAGTopK         int               `json:"rag_top_k"`
+	RAGCandidates   int               `json:"rag_candidates"`
+	RAGThreshold    *float64          `json:"rag_threshold"`
 }
 
 // chatResponse — HTTP-ответ фронтенду.
@@ -94,10 +96,13 @@ type kbIndexResponse struct {
 
 // kbSearchRequest — запрос поиска по индексу.
 type kbSearchRequest struct {
-	ProjectID string `json:"project_id"`
-	Strategy  string `json:"strategy"`
-	Query     string `json:"query"`
-	K         int    `json:"k"`
+	ProjectID  string   `json:"project_id"`
+	Strategy   string   `json:"strategy"`
+	Query      string   `json:"query"`
+	K          int      `json:"k"`
+	Candidates int      `json:"candidates"`
+	Mode       string   `json:"mode"`
+	Threshold  *float64 `json:"threshold"`
 }
 
 // kbSearchResult — результат поиска.
@@ -137,8 +142,11 @@ type kbGenerateRequest struct {
 
 // kbBenchmarkRequest — запуск оценки стратегий.
 type kbBenchmarkRequest struct {
-	ProjectID string `json:"project_id"`
-	K         int    `json:"k"`
+	ProjectID  string   `json:"project_id"`
+	K          int      `json:"k"`
+	Candidates int      `json:"candidates"`
+	Mode       string   `json:"mode"`
+	Threshold  *float64 `json:"threshold"`
 }
 
 // kbBenchmarkResponse — результаты оценки стратегий.

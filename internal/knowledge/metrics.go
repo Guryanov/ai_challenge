@@ -1,6 +1,9 @@
 package knowledge
 
-import "sort"
+import (
+	"math"
+	"sort"
+)
 
 // QueryResult — результат одного тест-запроса в бенчмарке.
 type QueryResult struct {
@@ -63,4 +66,25 @@ func dot(a, b []float32) float64 {
 		sum += float64(a[i]) * float64(b[i])
 	}
 	return sum
+}
+
+// normalizeVec приводит вектор к единичной длине, чтобы скалярное произведение
+// было косинусной близостью. Идемпотентна; нулевой вектор возвращается как есть.
+func normalizeVec(vec []float32) []float32 {
+	var sum float64
+	for _, v := range vec {
+		sum += float64(v) * float64(v)
+	}
+	if sum == 0 {
+		return vec
+	}
+	norm := math.Sqrt(sum)
+	if math.Abs(norm-1) < 1e-6 {
+		return vec
+	}
+	out := make([]float32, len(vec))
+	for i, v := range vec {
+		out[i] = float32(float64(v) / norm)
+	}
+	return out
 }

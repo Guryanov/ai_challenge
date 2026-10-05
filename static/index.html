@@ -939,7 +939,11 @@
                     <option value="structure">structure — по структуре</option>
                     <option value="fixed">fixed — по размеру</option>
                 </select>
-                <input type="number" id="rag-top-k" min="1" value="5" title="top-K" style="flex:0 0 80px;">
+                <input type="number" id="rag-top-k" min="1" value="5" title="top-K после фильтра" style="flex:0 0 80px;">
+            </div>
+            <div class="kb-row">
+                <input type="number" id="rag-threshold" step="0.05" value="0.35" title="Порог cosine: ниже — отсекается (отрицательный — выключить)" style="flex:1;">
+                <input type="number" id="rag-candidates" min="1" value="20" title="Кандидатов до фильтра" style="flex:0 0 80px;">
             </div>
         </div>
 
@@ -1317,6 +1321,8 @@
         const ragEnabled = document.getElementById('rag-enabled');
         const ragStrategy = document.getElementById('rag-strategy');
         const ragTopK = document.getElementById('rag-top-k');
+        const ragThreshold = document.getElementById('rag-threshold');
+        const ragCandidates = document.getElementById('rag-candidates');
 
         const workflowMode = document.getElementById('workflow-mode');
         const taskPanel = document.getElementById('task-panel');
@@ -1374,6 +1380,14 @@
         if (savedRAGTopK) {
             ragTopK.value = savedRAGTopK;
         }
+        const savedRAGThreshold = localStorage.getItem('rag_threshold');
+        if (savedRAGThreshold !== null && savedRAGThreshold !== '') {
+            ragThreshold.value = savedRAGThreshold;
+        }
+        const savedRAGCandidates = localStorage.getItem('rag_candidates');
+        if (savedRAGCandidates) {
+            ragCandidates.value = savedRAGCandidates;
+        }
         ragEnabled.addEventListener('change', () => {
             localStorage.setItem('rag_enabled', ragEnabled.checked ? 'true' : 'false');
         });
@@ -1382,6 +1396,12 @@
         });
         ragTopK.addEventListener('change', () => {
             localStorage.setItem('rag_top_k', ragTopK.value);
+        });
+        ragThreshold.addEventListener('change', () => {
+            localStorage.setItem('rag_threshold', ragThreshold.value);
+        });
+        ragCandidates.addEventListener('change', () => {
+            localStorage.setItem('rag_candidates', ragCandidates.value);
         });
 
         // Восстанавливаем идентификатор проекта.
@@ -1499,7 +1519,9 @@
                 stop_sequence: stopSequence.value.trim() || null,
                 rag_enabled: ragEnabled.checked,
                 rag_strategy: ragStrategy.value,
-                rag_top_k: parseInt(ragTopK.value, 10) || 0
+                rag_top_k: parseInt(ragTopK.value, 10) || 0,
+                rag_candidates: parseInt(ragCandidates.value, 10) || 0,
+                rag_threshold: parseNumberOrNull(ragThreshold.value)
             };
 
             try {
@@ -1897,6 +1919,11 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function parseNumberOrNull(value) {
+            const num = parseFloat(value);
+            return Number.isFinite(num) ? num : null;
         }
 
         function setLoading(loading) {
