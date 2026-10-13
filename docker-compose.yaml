@@ -1,0 +1,21 @@
+# Postgres для LiteLLM: хранение пользователей, виртуальных ключей, лимитов и расходов.
+# Сам LiteLLM запускается локально (pip/venv) через run-litellm.sh.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: llmproxy
+      POSTGRES_PASSWORD: dbpassword9090
+      POSTGRES_DB: litellm
+    ports:
+      - "5432:5432"
+    volumes:
+      - litellm_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llmproxy -d litellm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  litellm_db:
