@@ -202,30 +202,6 @@ func TestRunAddsSourcesAndCitations(t *testing.T) {
 	}
 }
 
-func TestRunWorkflowDoesNotRefuse(t *testing.T) {
-	client := &capturingClient{}
-	retriever := &fakeRetriever{}
-	cfg := Config{APIFormat: "openai", Model: "test", RAGEnabled: true, RAGThreshold: 0.35, RAGMode: "threshold"}
-	a := NewSimpleAgent(cfg, client).WithKnowledge(retriever)
-
-	resp, err := a.Run(AgentRequest{
-		Message:      "вопрос",
-		ProjectID:    "p",
-		SessionID:    "s-wf",
-		RAGEnabled:   boolPtr(true),
-		WorkflowMode: WorkflowModeWorkflow,
-	})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if len(client.payloads) == 0 {
-		t.Fatal("workflow must still call LLM, refusal is chat-only")
-	}
-	if resp.Content != "ok" {
-		t.Fatalf("content = %q, want ok", resp.Content)
-	}
-}
-
 func TestRunRetrievalErrorDoesNotRefuse(t *testing.T) {
 	client := &capturingClient{}
 	retriever := &fakeRetriever{err: errors.New("embedder недоступен")}

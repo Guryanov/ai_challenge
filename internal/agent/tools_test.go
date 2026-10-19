@@ -150,9 +150,8 @@ func TestRunWithToolsInChatMode(t *testing.T) {
 	agent := NewSimpleAgent(cfg, client).WithHistory(store).WithTools(tools)
 
 	resp, err := agent.Run(AgentRequest{
-		Message:      "Какая погода в Москве?",
-		SessionID:    "sess-tools",
-		WorkflowMode: WorkflowModeChat,
+		Message:   "Какая погода в Москве?",
+		SessionID: "sess-tools",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -188,40 +187,6 @@ func TestRunWithToolsInChatMode(t *testing.T) {
 	}
 	if messages[3].Role != "assistant" {
 		t.Fatalf("expected final assistant message, got %q", messages[3].Role)
-	}
-}
-
-func TestRunWorkflowModeDoesNotUseTools(t *testing.T) {
-	tmp := t.TempDir()
-	store, err := history.NewFileStore(tmp)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	client := &mockAPIClient{response: "План"}
-
-	tools := &mockToolRegistry{
-		definitions: []ToolDefinition{
-			{Name: "test_tool", Description: "test"},
-		},
-	}
-
-	cfg := Config{APIFormat: "openai", Model: "test"}
-	agent := NewSimpleAgent(cfg, client).WithHistory(store).WithTools(tools)
-
-	resp, err := agent.Run(AgentRequest{
-		Message:      "Сделай что-нибудь",
-		SessionID:    "sess-workflow-tools",
-		WorkflowMode: WorkflowModeWorkflow,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if resp.TaskStage != TaskStagePlanning {
-		t.Fatalf("expected planning stage, got %q", resp.TaskStage)
-	}
-	if len(tools.calls) != 0 {
-		t.Fatalf("expected no tool calls in workflow mode, got %d", len(tools.calls))
 	}
 }
 

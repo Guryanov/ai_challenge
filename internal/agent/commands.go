@@ -40,10 +40,6 @@ const diffUsageText = "Использование: /diff [номер PR]\n" +
 // noProjectText — подсказка, когда команда требует активный GitHub-проект.
 const noProjectText = "Сначала подключите GitHub-проект командой /help <owner/repo>."
 
-// workflowUnavailableText — предупреждение, что инструменты работают только в chat.
-const workflowUnavailableText = "Инструменты GitHub MCP доступны только в режиме chat. " +
-	"Переключите режим обработки на chat и повторите команду."
-
 // commandOutcome — результат обработки команды: либо готовый детерминированный
 // ответ (handled=true), либо синтезированный запрос к LLM (llmMessage != ""),
 // который выполняется обычным ReAct-путём с инструментами.
@@ -126,10 +122,6 @@ func runHelpCommand(session *history.Session, args string) commandOutcome {
 	b.WriteString("Проект GitHub ")
 	b.WriteString(repo)
 	b.WriteString(" подключён. Задавайте вопросы о проекте — отвечу по данным репозитория.")
-	if session.WorkflowMode == WorkflowModeWorkflow {
-		b.WriteString("\n\nВнимание: сейчас включён режим workflow, в котором инструменты не используются. ")
-		b.WriteString("Переключитесь в режим chat, чтобы получать ответы по репозиторию.")
-	}
 	b.WriteString("\n\nВыйти из режима проекта: /exit.")
 
 	return fixedOutcome(b.String())
@@ -152,9 +144,6 @@ func runBranchesCommand(session *history.Session, _ string) commandOutcome {
 	if session.GitHubProject == "" {
 		return fixedOutcome(noProjectText)
 	}
-	if session.WorkflowMode == WorkflowModeWorkflow {
-		return fixedOutcome(workflowUnavailableText)
-	}
 
 	return llmOutcome("Перечисли ветки репозитория " + session.GitHubProject +
 		" с помощью инструмента github MCP list_branches и выведи их списком с краткими пояснениями.")
@@ -176,22 +165,13 @@ func runBranchCommand(session *history.Session, args string) commandOutcome {
 
 	session.GitBranch = name
 
-	msg := "Активная ветка: " + name + "."
-	if session.WorkflowMode == WorkflowModeWorkflow {
-		msg += "\n\n" + workflowUnavailableText
-	} else {
-		msg += " Анализ diff: /diff."
-	}
-	return fixedOutcome(msg)
+	return fixedOutcome("Активная ветка: " + name + ". Анализ diff: /diff.")
 }
 
 // runDiffCommand получает и анализирует diff pull request.
 func runDiffCommand(session *history.Session, args string) commandOutcome {
 	if session.GitHubProject == "" {
 		return fixedOutcome(noProjectText)
-	}
-	if session.WorkflowMode == WorkflowModeWorkflow {
-		return fixedOutcome(workflowUnavailableText)
 	}
 
 	repo := session.GitHubProject

@@ -216,33 +216,31 @@ func (s *stubAgent) Manage(_ agent.AgentRequest) (agent.AgentResponse, error) {
 
 func (s *stubAgent) ClearHistory(_ string) error { return nil }
 
-func TestHandleChatTicketValidation(t *testing.T) {
+func TestHandleChatEmptyMessage(t *testing.T) {
 	stub := &stubAgent{}
 	handler := handleChat(stub)
 
-	rec := postJSON(t, handler, "/api/chat",
-		`{"message":"","ticket":{"user_name":"","question":"Вопрос"}}`)
+	rec := postJSON(t, handler, "/api/chat", `{"message":""}`)
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for ticket without user_name, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 400 for empty message, got %d: %s", rec.Code, rec.Body.String())
 	}
 	if stub.called {
-		t.Fatal("agent must not be called for invalid ticket")
+		t.Fatal("agent must not be called for empty message")
 	}
 }
 
-func TestHandleChatPassesTicket(t *testing.T) {
-	stub := &stubAgent{resp: agent.AgentResponse{Content: "Добрый день уважаемый Иван."}}
+func TestHandleChatPassesProjectID(t *testing.T) {
+	stub := &stubAgent{resp: agent.AgentResponse{Content: "ответ"}}
 	handler := handleChat(stub)
 
-	rec := postJSON(t, handler, "/api/chat",
-		`{"message":"","ticket":{"user_name":"Иван","project":"group/repo","question":"Почему падает X?"}}`)
+	rec := postJSON(t, handler, "/api/chat", `{"message":"вопрос","project_id":"my-project"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if stub.lastReq.Ticket == nil {
-		t.Fatal("ticket was not passed to the agent")
+	if !stub.called {
+		t.Fatal("agent was not called")
 	}
-	if stub.lastReq.Ticket.Project != "group/repo" {
-		t.Fatalf("ticket project = %q, want group/repo", stub.lastReq.Ticket.Project)
+	if stub.lastReq.ProjectID != "my-project" {
+		t.Fatalf("project_id = %q, want my-project", stub.lastReq.ProjectID)
 	}
 }

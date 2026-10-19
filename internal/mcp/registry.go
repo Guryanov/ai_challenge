@@ -272,28 +272,6 @@ func (r *Registry) fetchTools(ctx context.Context, name string, client *serverCl
 	return result
 }
 
-// ResolveGitLabServer возвращает имя GitLab MCP-сервера (если он есть в реестре)
-// и признак того, что он подключён. Сервер ищется по подстроке "gitlab" в имени
-// без учёта регистра; предпочитается подключённый сервер.
-func (r *Registry) ResolveGitLabServer() (string, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	var fallback string
-	for name, status := range r.statuses {
-		if !strings.Contains(strings.ToLower(name), "gitlab") {
-			continue
-		}
-		if status != nil && status.Connected {
-			return name, true
-		}
-		if fallback == "" {
-			fallback = name
-		}
-	}
-	return fallback, false
-}
-
 // CloseAll завершает все запущенные MCP-серверы.
 func (r *Registry) CloseAll() error {
 	r.mu.Lock()

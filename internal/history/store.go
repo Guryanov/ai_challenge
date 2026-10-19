@@ -40,16 +40,6 @@ type Branch struct {
 	Messages []Message `json:"messages"`
 }
 
-// TaskContext — контекст текущего задания, проходящего через этапы.
-type TaskContext struct {
-	OriginalRequest    string `json:"original_request,omitempty"`
-	Plan               string `json:"plan,omitempty"`
-	ExecutionResult    string `json:"execution_result,omitempty"`
-	VerificationReport string `json:"verification_report,omitempty"`
-	CompletionSummary  string `json:"completion_summary,omitempty"`
-	RejectionReason    string `json:"rejection_reason,omitempty"`
-}
-
 // Session — состояние диалога одной сессии.
 type Session struct {
 	Strategy     string            `json:"strategy"`
@@ -57,10 +47,6 @@ type Session struct {
 	Facts        map[string]string `json:"facts"`
 	Branches     map[string]Branch `json:"branches"`
 	ActiveBranch string            `json:"active_branch"`
-	WorkflowMode string            `json:"workflow_mode,omitempty"`
-	TaskStage    string            `json:"task_stage,omitempty"`
-	TaskStatus   string            `json:"task_status,omitempty"`
-	TaskContext  TaskContext       `json:"task_context,omitempty"`
 	// GitHubProject — активный GitHub-проект (owner/repo) для режима вопросов о проекте.
 	GitHubProject string `json:"github_project,omitempty"`
 	// GitBranch — активная git-ветка GitHub-проекта (для /branches, /branch, /diff).

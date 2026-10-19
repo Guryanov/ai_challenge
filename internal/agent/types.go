@@ -3,8 +3,6 @@ package agent
 import (
 	"context"
 	"time"
-
-	"ai-chat/internal/history"
 )
 
 // ContextStrategy — стратегия управления контекстом диалога.
@@ -18,12 +16,6 @@ const (
 	StrategyBranching     ContextStrategy = "branching"
 )
 
-// Режимы обработки запроса.
-const (
-	WorkflowModeChat     = "chat"
-	WorkflowModeWorkflow = "workflow"
-)
-
 // AgentRequest — запрос к агенту.
 type AgentRequest struct {
 	Message         string
@@ -31,13 +23,9 @@ type AgentRequest struct {
 	Role            string
 	SessionID       string
 	ProjectID       string
-	ProfileID       string
 	ContextStrategy ContextStrategy
 	Facts           map[string]string
 	BranchAction    string // create:<name> | switch:<name>
-	TaskAction      string // "approve" | "reject" | ""
-	RejectionReason string
-	WorkflowMode    string // "chat" | "workflow"
 	Temperature     *float64
 	MaxTokens       *int
 	StopSequence    string
@@ -47,24 +35,6 @@ type AgentRequest struct {
 	RAGTopK         int      // <= 0 — значение по умолчанию
 	RAGCandidates   int      // кандидатов до фильтра; <= 0 — значение по умолчанию
 	RAGThreshold    *float64 // порог cosine; nil — значение по умолчанию
-	// Ticket — прикреплённый тикет пользователя (one-shot). Если задан, вопрос
-	// берётся из тикета, а ответ начинается с приветствия «Добрый день уважаемый …».
-	Ticket *Ticket
-}
-
-// Ticket — тикет пользователя с вопросом о проекте (плоская JSON-схема).
-type Ticket struct {
-	ID        string `json:"ticket_id"`
-	UserName  string `json:"user_name"`
-	UserEmail string `json:"user_email"`
-	Project   string `json:"project"`
-	Question  string `json:"question"`
-	CreatedAt string `json:"created_at"`
-}
-
-// GitLabServerResolver позволяет определить имя подключённого GitLab MCP-сервера.
-type GitLabServerResolver interface {
-	ResolveGitLabServer() (name string, connected bool)
 }
 
 // RetrieveOptions — параметры RAG-поиска, передаваемые ретриверу.
@@ -90,10 +60,6 @@ type AgentResponse struct {
 	Branches           []string
 	Facts              map[string]string
 	ProjectID          string
-	ProfileID          string
-	TaskStage          string
-	TaskStatus         string
-	TaskContext        history.TaskContext
 	Duration           time.Duration
 	Sources            []SourceRef
 	RAGUsed            bool

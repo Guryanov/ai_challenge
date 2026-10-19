@@ -177,39 +177,6 @@
             color: #6c757d;
             font-size: 12px;
         }
-        .attach-button {
-            padding: 10px 16px;
-            background-color: #f1f3f5;
-            color: #343a40;
-            border: 1px solid #ced4da;
-            border-radius: 24px;
-            font-size: 14px;
-            cursor: pointer;
-            white-space: nowrap;
-        }
-        .attach-button:hover {
-            background-color: #e2e6ea;
-        }
-        .ticket-chip {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin: 0 4px 8px;
-            padding: 8px 12px;
-            background-color: #e7f1ff;
-            color: #0b5ed7;
-            border: 1px solid #b6d4fe;
-            border-radius: 8px;
-            font-size: 13px;
-        }
-        .ticket-chip .ticket-chip-remove {
-            margin-left: auto;
-            border: none;
-            background: transparent;
-            color: #0b5ed7;
-            cursor: pointer;
-            font-size: 14px;
-        }
         #message-input {
             flex: 1;
             padding: 12px 16px;
@@ -320,88 +287,6 @@
             cursor: pointer;
             font-size: 13px;
         }
-        .memory-tabs {
-            display: flex;
-            gap: 4px;
-            margin-bottom: 8px;
-        }
-        .memory-tab {
-            flex: 1;
-            padding: 8px 4px;
-            background-color: #f0f0f0;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-        .memory-tab.active {
-            background-color: #007bff;
-            color: #fff;
-            border-color: #007bff;
-        }
-        .memory-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            max-height: 300px;
-            overflow-y: auto;
-            margin-bottom: 8px;
-        }
-        .memory-entry {
-            background-color: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 10px;
-            font-size: 12px;
-        }
-        .memory-entry.auto-generated {
-            background-color: #f0f0f0;
-            color: #666;
-        }
-        .memory-entry-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 8px;
-            margin-bottom: 4px;
-        }
-        .memory-entry-title {
-            font-weight: 600;
-            color: #2c3e50;
-        }
-        .memory-entry.auto-generated .memory-entry-title {
-            color: #666;
-        }
-        .memory-entry-actions {
-            display: flex;
-            gap: 6px;
-            flex-shrink: 0;
-        }
-        .memory-entry-actions button {
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 12px;
-            color: #007bff;
-            padding: 0;
-        }
-        .memory-entry-actions button.delete {
-            color: #dc3545;
-        }
-        .memory-entry-content {
-            color: #555;
-            margin-bottom: 4px;
-            word-wrap: break-word;
-        }
-        .memory-entry-tags {
-            font-size: 11px;
-            color: #888;
-        }
-        .memory-entry-badge {
-            font-size: 10px;
-            color: #888;
-            font-style: italic;
-        }
         .memory-add-button {
             width: 100%;
             padding: 8px;
@@ -487,166 +372,6 @@
         .dialog-buttons button.secondary {
             background-color: #f0f0f0;
             color: #333;
-        }
-        .message-actions {
-            display: flex;
-            gap: 8px;
-            margin: 4px;
-            opacity: 0.6;
-            transition: opacity 0.2s;
-        }
-        .message-actions:hover {
-            opacity: 1;
-        }
-        .message-actions button {
-            background: none;
-            border: none;
-            color: #007bff;
-            cursor: pointer;
-            font-size: 11px;
-            padding: 2px 4px;
-        }
-        .message-actions button:hover {
-            text-decoration: underline;
-        }
-        .profile-actions {
-            display: flex;
-            gap: 6px;
-            margin-top: 8px;
-        }
-        .profile-actions button {
-            flex: 1;
-            padding: 6px 4px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            background-color: #f8f9fa;
-            cursor: pointer;
-            font-size: 12px;
-        }
-        .profile-actions button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        .profile-actions button.danger {
-            color: #dc3545;
-            border-color: #dc3545;
-        }
-        .profile-actions button:not(:disabled):hover {
-            background-color: #e9ecef;
-        }
-        .task-state {
-            font-size: 13px;
-            color: #555;
-            margin-bottom: 8px;
-            padding: 8px;
-            background-color: #f8f9fa;
-            border-radius: 6px;
-            text-align: center;
-        }
-        .task-stages {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            margin-bottom: 8px;
-        }
-        .task-stage {
-            font-size: 12px;
-            padding: 6px 8px;
-            border-radius: 6px;
-            background-color: #e9ecef;
-            color: #666;
-        }
-        .task-stage.active {
-            background-color: #007bff;
-            color: #fff;
-        }
-        .task-stage.completed {
-            background-color: #28a745;
-            color: #fff;
-        }
-        .task-actions {
-            display: flex;
-            gap: 8px;
-            margin: 8px 4px 0;
-        }
-        .task-actions button {
-            flex: 1;
-            padding: 6px 10px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-        .task-actions button.approve {
-            background-color: #28a745;
-            color: #fff;
-        }
-        .task-actions button.reject {
-            background-color: #dc3545;
-            color: #fff;
-        }
-        .task-reason {
-            width: 100%;
-            margin-top: 6px;
-            padding: 6px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            font-size: 12px;
-            resize: vertical;
-        }
-        .invariants-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            max-height: 240px;
-            overflow-y: auto;
-            margin-bottom: 8px;
-        }
-        .invariant-entry {
-            background-color: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 10px;
-            font-size: 12px;
-        }
-        .invariant-entry.inactive {
-            opacity: 0.6;
-        }
-        .invariant-entry-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 8px;
-            margin-bottom: 4px;
-        }
-        .invariant-entry-title {
-            font-weight: 600;
-            color: #2c3e50;
-        }
-        .invariant-entry-actions {
-            display: flex;
-            gap: 6px;
-            flex-shrink: 0;
-        }
-        .invariant-entry-actions button {
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 12px;
-            color: #007bff;
-            padding: 0;
-        }
-        .invariant-entry-actions button.delete {
-            color: #dc3545;
-        }
-        .invariant-entry-meta {
-            font-size: 11px;
-            color: #888;
-            margin-bottom: 4px;
-        }
-        .invariant-entry-description {
-            color: #555;
-            word-wrap: break-word;
         }
         .mcp-header {
             display: flex;
@@ -768,34 +493,6 @@
             font-size: 12px;
             text-align: center;
             padding: 12px 0;
-        }
-        .daily-digest {
-            background-color: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-        .daily-digest h3 {
-            margin: 0 0 8px;
-            font-size: 14px;
-            color: #2c3e50;
-        }
-        .daily-digest-meta {
-            font-size: 11px;
-            color: #888;
-            margin-bottom: 8px;
-        }
-        .daily-digest-content {
-            font-size: 14px;
-            line-height: 1.5;
-            white-space: pre-wrap;
-            color: #333;
-        }
-        .daily-digest-error {
-            font-size: 13px;
-            color: #888;
-            font-style: italic;
         }
         .kb-status {
             font-size: 12px;
@@ -977,38 +674,6 @@
         <h2>Настройки</h2>
 
         <div class="tool-group">
-            <label for="profile-select">Профиль</label>
-            <select id="profile-select">
-                <option value="">—</option>
-            </select>
-            <div class="profile-actions">
-                <button type="button" id="create-profile">Создать</button>
-                <button type="button" id="edit-profile" disabled>Редактировать</button>
-                <button type="button" id="delete-profile" class="danger" disabled>Удалить</button>
-            </div>
-        </div>
-
-        <div class="tool-group">
-            <label for="workflow-mode">Режим обработки</label>
-            <select id="workflow-mode">
-                <option value="chat">Chat — прямой ответ</option>
-                <option value="workflow">Workflow — этапы задачи</option>
-            </select>
-        </div>
-
-        <div id="task-panel" class="tool-group hidden">
-            <label>Задание</label>
-            <div id="task-state" class="task-state">Нет активного задания</div>
-            <div class="task-stages">
-                <div class="task-stage" data-stage="planning">Планирование</div>
-                <div class="task-stage" data-stage="execution">Выполнение</div>
-                <div class="task-stage" data-stage="verification">Проверка</div>
-                <div class="task-stage" data-stage="completion">Завершение</div>
-            </div>
-            <button type="button" id="cancel-task" class="memory-add-button" style="background-color:#dc3545;">Отменить задание</button>
-        </div>
-
-        <div class="tool-group">
             <label for="project-id">Проект</label>
             <input type="text" id="project-id" placeholder="my-project" title="Буквы, цифры, пробелы, дефисы и подчёркивания">
         </div>
@@ -1026,22 +691,6 @@
                 <input type="number" id="rag-threshold" step="0.05" value="0.35" title="Порог cosine: ниже — отсекается (отрицательный — выключить)" style="flex:1;">
                 <input type="number" id="rag-candidates" min="1" value="20" title="Кандидатов до фильтра" style="flex:0 0 80px;">
             </div>
-        </div>
-
-        <div id="memory-panel" class="tool-group hidden">
-            <label>Память проекта</label>
-            <div class="memory-tabs">
-                <button type="button" class="memory-tab active" data-tab="long_term">Долгосрочная <span id="count-long_term">(0)</span></button>
-                <button type="button" class="memory-tab" data-tab="working">Рабочая <span id="count-working">(0)</span></button>
-            </div>
-            <div id="memory-list" class="memory-list"></div>
-            <button type="button" id="add-memory" class="memory-add-button">Добавить запись</button>
-        </div>
-
-        <div id="invariants-panel" class="tool-group hidden">
-            <label>Инварианты</label>
-            <div id="invariants-list" class="invariants-list"></div>
-            <button type="button" id="add-invariant" class="memory-add-button">Добавить инвариант</button>
         </div>
 
         <div class="tool-group">
@@ -1139,118 +788,14 @@
     <div id="main">
         <header>Чат с внешним API</header>
         <div id="chat">
-            <div id="daily-digest" class="daily-digest hidden"></div>
             <div class="empty-state">Введите сообщение, чтобы начать диалог</div>
         </div>
         <div id="composer">
             <div id="command-hint" class="command-hint hidden"></div>
-            <div id="ticket-chip" class="ticket-chip hidden"></div>
             <form id="input-area">
                 <div id="project-mode" class="project-mode hidden"></div>
-                <button type="button" id="ticket-attach-button" class="attach-button" title="Прикрепить тикет (JSON)">Тикет</button>
-                <input type="file" id="ticket-file-input" accept=".json,application/json" hidden>
                 <input type="text" id="message-input" placeholder="Введите сообщение или /help owner/repo..." autocomplete="off" autofocus>
                 <button type="submit" id="send-button">Отправить</button>
-            </form>
-        </div>
-    </div>
-
-    <div id="memory-dialog" class="dialog hidden">
-        <div class="dialog-content">
-            <h3 id="memory-dialog-title">Запись памяти</h3>
-            <form id="memory-form">
-                <input type="hidden" id="memory-id">
-                <div class="form-group">
-                    <label for="memory-level">Уровень</label>
-                    <select id="memory-level" required>
-                        <option value="long_term">Долгосрочная</option>
-                        <option value="working">Рабочая</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="memory-type">Тип</label>
-                    <select id="memory-type" required></select>
-                </div>
-                <div class="form-group">
-                    <label for="memory-title">Заголовок</label>
-                    <input type="text" id="memory-title" required>
-                </div>
-                <div class="form-group">
-                    <label for="memory-content">Содержимое</label>
-                    <textarea id="memory-content" rows="4"></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="memory-tags">Теги (через запятую)</label>
-                    <input type="text" id="memory-tags">
-                </div>
-                <div class="dialog-buttons">
-                    <button type="button" id="memory-cancel" class="secondary">Отмена</button>
-                    <button type="submit" class="primary">Сохранить</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="invariants-dialog" class="dialog hidden">
-        <div class="dialog-content">
-            <h3 id="invariants-dialog-title">Инвариант</h3>
-            <form id="invariants-form">
-                <input type="hidden" id="invariant-index" value="">
-                <div class="form-group">
-                    <label for="invariant-title">Заголовок</label>
-                    <input type="text" id="invariant-title" required>
-                </div>
-                <div class="form-group">
-                    <label for="invariant-description">Описание</label>
-                    <textarea id="invariant-description" rows="3"></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="invariant-category">Категория</label>
-                    <select id="invariant-category" required>
-                        <option value="architecture">Архитектура</option>
-                        <option value="technical_decision">Техническое решение</option>
-                        <option value="stack">Стек</option>
-                        <option value="business_rule">Бизнес-правило</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="invariant-severity">Жёсткость</label>
-                    <select id="invariant-severity" required>
-                        <option value="hard">Hard — отказ при нарушении</option>
-                        <option value="soft">Soft — предупреждение</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="invariant-active" checked>
-                        Активен
-                    </label>
-                </div>
-                <div class="dialog-buttons">
-                    <button type="button" id="invariant-cancel" class="secondary">Отмена</button>
-                    <button type="submit" class="primary">Сохранить</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="profile-dialog" class="dialog hidden">
-        <div class="dialog-content">
-            <h3 id="profile-dialog-title">Профиль</h3>
-            <form id="profile-form">
-                <input type="hidden" id="profile-id">
-                <div class="form-group">
-                    <label for="profile-name">Имя профиля</label>
-                    <input type="text" id="profile-name" required>
-                </div>
-                <div class="form-group">
-                    <label for="profile-description">Описание пользователя</label>
-                    <textarea id="profile-description" rows="6" placeholder="Расскажите, кто вы, ваши цели, стиль общения, предпочтения..."></textarea>
-                </div>
-                <div class="dialog-buttons">
-                    <button type="button" id="profile-cancel" class="secondary">Отмена</button>
-                    <button type="submit" class="primary">Сохранить</button>
-                </div>
             </form>
         </div>
     </div>
@@ -1310,16 +855,11 @@
 
     <script>
         const chat = document.getElementById('chat');
-        const dailyDigest = document.getElementById('daily-digest');
         const form = document.getElementById('input-area');
         const input = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
         const projectMode = document.getElementById('project-mode');
         const commandHint = document.getElementById('command-hint');
-        const ticketChip = document.getElementById('ticket-chip');
-        const ticketAttachButton = document.getElementById('ticket-attach-button');
-        const ticketFileInput = document.getElementById('ticket-file-input');
-        let attachedTicket = null;
         const role = document.getElementById('role');
         const responseFormat = document.getElementById('response-format');
         const temperature = document.getElementById('temperature');
@@ -1337,49 +877,9 @@
         const createBranchButton = document.getElementById('create-branch');
         const clearHistoryButton = document.getElementById('clear-history');
         const projectIdInput = document.getElementById('project-id');
-        const memoryPanel = document.getElementById('memory-panel');
-        const memoryList = document.getElementById('memory-list');
-        const memoryTabs = document.querySelectorAll('.memory-tab');
-        const addMemoryButton = document.getElementById('add-memory');
-        const memoryDialog = document.getElementById('memory-dialog');
-        const memoryForm = document.getElementById('memory-form');
-        const memoryDialogTitle = document.getElementById('memory-dialog-title');
-        const memoryIdInput = document.getElementById('memory-id');
-        const memoryLevelInput = document.getElementById('memory-level');
-        const memoryTypeInput = document.getElementById('memory-type');
-        const memoryTitleInput = document.getElementById('memory-title');
-        const memoryContentInput = document.getElementById('memory-content');
-        const memoryTagsInput = document.getElementById('memory-tags');
-        const memoryCancelButton = document.getElementById('memory-cancel');
-
-        const invariantsPanel = document.getElementById('invariants-panel');
-        const invariantsList = document.getElementById('invariants-list');
-        const addInvariantButton = document.getElementById('add-invariant');
-        const invariantsDialog = document.getElementById('invariants-dialog');
-        const invariantsForm = document.getElementById('invariants-form');
-        const invariantsDialogTitle = document.getElementById('invariants-dialog-title');
-        const invariantIndexInput = document.getElementById('invariant-index');
-        const invariantTitleInput = document.getElementById('invariant-title');
-        const invariantDescriptionInput = document.getElementById('invariant-description');
-        const invariantCategoryInput = document.getElementById('invariant-category');
-        const invariantSeverityInput = document.getElementById('invariant-severity');
-        const invariantActiveInput = document.getElementById('invariant-active');
-        const invariantCancelButton = document.getElementById('invariant-cancel');
-
-        const profileSelect = document.getElementById('profile-select');
-        const createProfileButton = document.getElementById('create-profile');
-        const editProfileButton = document.getElementById('edit-profile');
-        const deleteProfileButton = document.getElementById('delete-profile');
-        const profileDialog = document.getElementById('profile-dialog');
-        const profileForm = document.getElementById('profile-form');
-        const profileDialogTitle = document.getElementById('profile-dialog-title');
-        const profileIdInput = document.getElementById('profile-id');
-        const profileNameInput = document.getElementById('profile-name');
 
         const mcpStatusContainer = document.getElementById('mcp-status');
         const mcpRefreshButton = document.getElementById('mcp-refresh');
-        const profileDescriptionInput = document.getElementById('profile-description');
-        const profileCancelButton = document.getElementById('profile-cancel');
 
         const kbPanel = document.getElementById('kb-panel');
         const kbOpenButton = document.getElementById('kb-open');
@@ -1418,32 +918,7 @@
         const ragThreshold = document.getElementById('rag-threshold');
         const ragCandidates = document.getElementById('rag-candidates');
 
-        const workflowMode = document.getElementById('workflow-mode');
-        const taskPanel = document.getElementById('task-panel');
-        const taskStateLabel = document.getElementById('task-state');
-        const taskStageElements = document.querySelectorAll('.task-stage');
-        const cancelTaskButton = document.getElementById('cancel-task');
-
-        const memoryTypes = {
-            long_term: [
-                { value: 'technology', label: 'Технология' },
-                { value: 'pattern', label: 'Паттерн' },
-                { value: 'principle', label: 'Принцип' },
-                { value: 'knowledge', label: 'Знание' },
-                { value: 'summary', label: 'Summary' },
-            ],
-            working: [
-                { value: 'task', label: 'Задача' },
-                { value: 'entity', label: 'Сущность' },
-            ],
-        };
-
         let facts = {};
-        let memoryState = { long_term: [], working: [] };
-        let invariantsState = [];
-        let activeMemoryTab = 'long_term';
-        let profiles = [];
-        let taskState = { stage: '', status: '', context: {} };
 
         // Генерируем или восстанавливаем идентификатор сессии.
         let sessionId = localStorage.getItem('chat_session_id');
@@ -1452,14 +927,8 @@
             localStorage.setItem('chat_session_id', sessionId);
         }
 
-        // Загружаем список профилей и восстанавливаем активный профиль.
-        loadProfiles();
-
         // Загружаем статус MCP-серверов.
         loadMCPStatus();
-
-        // Загружаем ежедневную сводку.
-        loadDailyDigest();
 
         // Восстанавливаем настройки RAG.
         const savedRAGEnabled = localStorage.getItem('rag_enabled');
@@ -1502,11 +971,8 @@
         const savedProjectId = localStorage.getItem('chat_project_id');
         if (savedProjectId) {
             projectIdInput.value = savedProjectId;
-            loadMemory(savedProjectId);
             loadKBFiles(savedProjectId);
         }
-        updateMemoryPanel();
-        updateInvariantsPanel();
         updateKBPanel();
 
         let projectIdDebounceTimer = null;
@@ -1517,8 +983,6 @@
 
             if (newProjectId && !isValidProjectId(newProjectId)) {
                 projectIdInput.value = oldProjectId;
-                updateMemoryPanel();
-                updateInvariantsPanel();
                 return;
             }
 
@@ -1530,19 +994,10 @@
                 localStorage.setItem('chat_session_id', sessionId);
                 resetChat();
                 facts = {};
-                taskState = { stage: '', status: '', context: {} };
-                renderTaskPanel();
                 contextStrategy.value = 'full';
                 updateStrategyUI();
             }
 
-            memoryState = { long_term: [], working: [] };
-            invariantsState = [];
-            updateMemoryPanel();
-            updateInvariantsPanel();
-            if (newProjectId) {
-                await loadMemory(newProjectId);
-            }
             await loadKBFiles(newProjectId);
             loadKBQueries();
             loadKBMetrics(newProjectId);
@@ -1569,12 +1024,6 @@
             contextStrategy.value = savedStrategy;
         }
         updateStrategyUI();
-
-        // Восстанавливаем режим обработки.
-        const savedWorkflowMode = localStorage.getItem('workflow_mode');
-        if (savedWorkflowMode) {
-            workflowMode.value = savedWorkflowMode;
-        }
 
         // --- Чат-команды: индикатор активного GitHub-проекта и подсказка «/» ---
 
@@ -1646,81 +1095,11 @@
         input.addEventListener('blur', () => setTimeout(hideCommandHint, 100));
         restoreProjectMode();
 
-        function renderTicketChip() {
-            if (!attachedTicket) {
-                ticketChip.classList.add('hidden');
-                ticketChip.innerHTML = '';
-                return;
-            }
-            const parts = [];
-            if (attachedTicket.ticket_id) parts.push('Тикет #' + attachedTicket.ticket_id);
-            if (attachedTicket.project) parts.push(attachedTicket.project);
-            if (attachedTicket.user_name) parts.push(attachedTicket.user_name);
-            ticketChip.innerHTML = '<span>' + escapeHtml(parts.join(' · ')) + '</span>' +
-                '<button type="button" class="ticket-chip-remove" title="Убрать тикет">✕</button>';
-            ticketChip.querySelector('.ticket-chip-remove').addEventListener('click', clearAttachedTicket);
-            ticketChip.classList.remove('hidden');
-        }
-
-        function clearAttachedTicket() {
-            attachedTicket = null;
-            ticketFileInput.value = '';
-            renderTicketChip();
-        }
-
-        function handleTicketFile(file) {
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = () => {
-                let data;
-                try {
-                    data = JSON.parse(reader.result);
-                } catch (err) {
-                    alert('Не удалось прочитать JSON тикета: ' + err.message);
-                    return;
-                }
-                const userName = (data.user_name || '').toString().trim();
-                const question = (data.question || '').toString().trim();
-                if (!userName || !question) {
-                    alert('В тикете обязательны поля user_name и question');
-                    return;
-                }
-                attachedTicket = {
-                    ticket_id: (data.ticket_id || '').toString(),
-                    user_name: userName,
-                    user_email: (data.user_email || '').toString(),
-                    project: (data.project || '').toString(),
-                    question: question,
-                    created_at: (data.created_at || '').toString()
-                };
-                renderTicketChip();
-            };
-            reader.onerror = () => alert('Ошибка чтения файла тикета');
-            reader.readAsText(file);
-        }
-
-        ticketAttachButton.addEventListener('click', () => ticketFileInput.click());
-        ticketFileInput.addEventListener('change', () => {
-            if (ticketFileInput.files && ticketFileInput.files[0]) {
-                handleTicketFile(ticketFileInput.files[0]);
-            }
-        });
-
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             hideCommandHint();
-            if (taskState.status === 'pending') {
-                alert('Текущий этап ожидает утверждения. Используйте кнопки под ответом ассистента.');
-                return;
-            }
             const message = input.value.trim();
-            if (!message && !attachedTicket) return;
-
-            const ticket = attachedTicket;
-            const displayText = ticket
-                ? ((ticket.ticket_id ? 'Тикет #' + ticket.ticket_id + ' · ' : 'Тикет · ') +
-                    (ticket.project ? ticket.project + '\n' : '\n') + ticket.question)
-                : message;
+            if (!message) return;
 
             input.value = '';
             setLoading(true);
@@ -1728,7 +1107,7 @@
             const exchange = document.createElement('div');
             exchange.className = 'exchange';
 
-            const userMessage = createMessage(displayText, 'user-message');
+            const userMessage = createMessage(message, 'user-message');
             exchange.appendChild(userMessage);
             chat.appendChild(exchange);
 
@@ -1736,15 +1115,13 @@
             scrollToBottom();
 
             const payload = {
-                message: message || (ticket ? ticket.question : ''),
+                message: message,
                 role: role.value || null,
                 response_format: responseFormat.value,
                 session_id: sessionId,
-                project_id: (ticket && ticket.project) ? ticket.project : projectIdInput.value.trim(),
-                profile_id: profileSelect.value,
+                project_id: projectIdInput.value.trim(),
                 context_strategy: contextStrategy.value,
                 facts: facts,
-                workflow_mode: workflowMode.value,
                 temperature: parseFloat(temperature.value) || null,
                 max_tokens: parseInt(maxTokens.value, 10) || null,
                 stop_sequence: stopSequence.value.trim() || null,
@@ -1752,8 +1129,7 @@
                 rag_strategy: ragStrategy.value,
                 rag_top_k: parseInt(ragTopK.value, 10) || 0,
                 rag_candidates: parseInt(ragCandidates.value, 10) || 0,
-                rag_threshold: parseNumberOrNull(ragThreshold.value),
-                ticket: ticket
+                rag_threshold: parseNumberOrNull(ragThreshold.value)
             };
 
             try {
@@ -1775,7 +1151,7 @@
                         completionTokens: data.completion_tokens,
                         totalTokens: data.total_tokens,
                         sessionTotalTokens: data.session_total_tokens
-                    }, data.task_stage, data.task_status);
+                    });
                     exchange.appendChild(apiMessage);
 
                     updateStateFromResponse(data);
@@ -1785,20 +1161,11 @@
                 exchange.appendChild(errorMessage);
             } finally {
                 setLoading(false);
-                clearAttachedTicket();
                 scrollToBottom();
             }
         });
 
-        const taskStageNames = {
-            planning: 'Планирование',
-            execution: 'Выполнение',
-            verification: 'Проверка',
-            completion: 'Завершение'
-        };
-        const taskStagesOrder = ['planning', 'execution', 'verification', 'completion'];
-
-        function createMessage(text, className, finishReason = null, stats = null, taskStage = null, taskStatus = null) {
+        function createMessage(text, className, finishReason = null, stats = null) {
             const wrapper = document.createElement('div');
             wrapper.style.display = 'flex';
             wrapper.style.flexDirection = 'column';
@@ -1806,11 +1173,7 @@
 
             const meta = document.createElement('div');
             meta.className = 'meta';
-            if (taskStage && className === 'api-message') {
-                meta.textContent = (taskStageNames[taskStage] || taskStage) + (taskStatus === 'pending' ? ' • ожидает' : '');
-            } else {
-                meta.textContent = className === 'user-message' ? 'Вы' : 'API';
-            }
+            meta.textContent = className === 'user-message' ? 'Вы' : 'API';
 
             const bubble = document.createElement('div');
             bubble.className = 'message ' + className;
@@ -1818,59 +1181,6 @@
 
             wrapper.appendChild(meta);
             wrapper.appendChild(bubble);
-
-            if (className !== 'error-message') {
-                const actions = document.createElement('div');
-                actions.className = 'message-actions';
-                actions.style.alignSelf = className === 'user-message' ? 'flex-end' : 'flex-start';
-                actions.innerHTML = `
-                    <button type="button" data-action="long_term">Сохранить в долгосрочную</button>
-                    <button type="button" data-action="working">Сохранить в рабочую</button>
-                `;
-                actions.querySelectorAll('button').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        openMemoryDialog(null, btn.dataset.action, text);
-                    });
-                });
-                wrapper.appendChild(actions);
-            }
-
-            if (className === 'api-message' && taskStatus === 'pending') {
-                const taskActions = document.createElement('div');
-                taskActions.className = 'task-actions';
-                taskActions.style.alignSelf = 'flex-start';
-                taskActions.innerHTML = `
-                    <button type="button" class="approve">Утвердить</button>
-                    <button type="button" class="reject">Отклонить</button>
-                `;
-                const reasonInput = document.createElement('textarea');
-                reasonInput.className = 'task-reason hidden';
-                reasonInput.placeholder = 'Причина отклонения (необязательно)';
-                reasonInput.rows = 2;
-
-                const approveBtn = taskActions.querySelector('.approve');
-                const rejectBtn = taskActions.querySelector('.reject');
-
-                approveBtn.addEventListener('click', () => {
-                    approveBtn.disabled = true;
-                    rejectBtn.disabled = true;
-                    sendTaskAction('approve');
-                });
-
-                rejectBtn.addEventListener('click', () => {
-                    if (reasonInput.classList.contains('hidden')) {
-                        reasonInput.classList.remove('hidden');
-                        reasonInput.focus();
-                        return;
-                    }
-                    approveBtn.disabled = true;
-                    rejectBtn.disabled = true;
-                    sendTaskAction('reject', reasonInput.value.trim());
-                });
-
-                wrapper.appendChild(taskActions);
-                wrapper.appendChild(reasonInput);
-            }
 
             if (finishReason || stats) {
                 const infoRow = document.createElement('div');
@@ -1916,8 +1226,6 @@
                 localStorage.setItem('chat_session_id', sessionId);
                 localStorage.removeItem('context_strategy');
                 facts = {};
-                taskState = { stage: '', status: '', context: {} };
-                renderTaskPanel();
                 contextStrategy.value = 'full';
                 updateStrategyUI();
                 resetChat();
@@ -1939,24 +1247,6 @@
                 if (response.ok) updateStateFromResponse(data);
             } catch (err) {
                 console.error('Ошибка смены стратегии:', err);
-            }
-        });
-
-        workflowMode.addEventListener('change', async () => {
-            localStorage.setItem('workflow_mode', workflowMode.value);
-            if (workflowMode.value === 'chat' && taskState.stage) {
-                // Очищаем состояние задачи на сервере при переходе в chat.
-                try {
-                    await fetch('/api/task/cancel', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ session_id: sessionId })
-                    });
-                } catch (err) {
-                    console.error('Ошибка отмены задачи при смене режима:', err);
-                }
-                taskState = { stage: '', status: '', context: {} };
-                renderTaskPanel();
             }
         });
 
@@ -2062,14 +1352,6 @@
                 facts = data.facts;
                 renderFacts();
             }
-            if (data.task_stage !== undefined) {
-                taskState = {
-                    stage: data.task_stage,
-                    status: data.task_status,
-                    context: data.task_context || {}
-                };
-                renderTaskPanel();
-            }
             if (data.active_github_project !== undefined) {
                 const repo = data.active_github_project || '';
                 if (repo) {
@@ -2089,82 +1371,6 @@
                 renderProjectMode(localStorage.getItem('github_project') || '', branch);
             }
         }
-
-        function renderTaskPanel() {
-            if (!taskState.stage) {
-                taskPanel.classList.add('hidden');
-                input.disabled = false;
-                return;
-            }
-            taskPanel.classList.remove('hidden');
-            taskStateLabel.textContent = (taskStageNames[taskState.stage] || taskState.stage) +
-                (taskState.status === 'pending' ? ' • ожидает утверждения' : ' • утверждено');
-            const currentIndex = taskStagesOrder.indexOf(taskState.stage);
-            taskStageElements.forEach(el => {
-                const stage = el.dataset.stage;
-                const stageIndex = taskStagesOrder.indexOf(stage);
-                el.classList.toggle('active', stage === taskState.stage);
-                el.classList.toggle('completed', stageIndex < currentIndex);
-            });
-            input.disabled = taskState.status === 'pending';
-            sendButton.disabled = taskState.status === 'pending';
-        }
-
-        async function sendTaskAction(action, reason = '') {
-            setLoading(true);
-            try {
-                const response = await fetch('/api/task/' + action, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        context_strategy: contextStrategy.value,
-                        reason: reason
-                    })
-                });
-                const data = await response.json();
-                if (!response.ok || data.error) {
-                    const errorMessage = createMessage(data.error || 'Неизвестная ошибка', 'error-message');
-                    chat.appendChild(errorMessage);
-                } else {
-                    const apiMessage = createMessage(data.response || '(пустой ответ)', 'api-message', data.finish_reason, {
-                        durationMs: data.duration_ms,
-                        promptTokens: data.prompt_tokens,
-                        completionTokens: data.completion_tokens,
-                        totalTokens: data.total_tokens,
-                        sessionTotalTokens: data.session_total_tokens
-                    }, data.task_stage, data.task_status);
-                    chat.appendChild(apiMessage);
-                    updateStateFromResponse(data);
-                }
-            } catch (err) {
-                const errorMessage = createMessage('Ошибка сети: ' + err.message, 'error-message');
-                chat.appendChild(errorMessage);
-            } finally {
-                setLoading(false);
-                scrollToBottom();
-            }
-        }
-
-        cancelTaskButton.addEventListener('click', async () => {
-            if (!confirm('Отменить текущее задание?')) return;
-            try {
-                const response = await fetch('/api/task/cancel', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId })
-                });
-                if (!response.ok) {
-                    const data = await response.json();
-                    alert('Ошибка отмены: ' + (data.error || 'Неизвестная ошибка'));
-                    return;
-                }
-                taskState = { stage: '', status: '', context: {} };
-                renderTaskPanel();
-            } catch (err) {
-                alert('Ошибка сети: ' + err.message);
-            }
-        });
 
         function escapeHtml(text) {
             const div = document.createElement('div');
@@ -2189,49 +1395,12 @@
         }
 
         function resetChat() {
-            // Удаляем только сообщения, сохраняя блок ежедневной сводки.
             chat.querySelectorAll('.exchange').forEach(el => el.remove());
             if (!chat.querySelector('.empty-state')) {
                 const empty = document.createElement('div');
                 empty.className = 'empty-state';
                 empty.textContent = 'Введите сообщение, чтобы начать диалог';
                 chat.appendChild(empty);
-            }
-            loadDailyDigest();
-        }
-
-        async function loadDailyDigest() {
-            try {
-                const response = await fetch('/api/digest');
-                if (!response.ok) {
-                    dailyDigest.classList.add('hidden');
-                    return;
-                }
-                const data = await response.json();
-                if (data.error) {
-                    dailyDigest.classList.remove('hidden');
-                    dailyDigest.innerHTML = `
-                        <h3>Ежедневная сводка фильмов</h3>
-                        <div class="daily-digest-error">Сводка временно недоступна: ${escapeHtml(data.error)}</div>
-                    `;
-                    return;
-                }
-                if (!data.content) {
-                    dailyDigest.classList.add('hidden');
-                    return;
-                }
-                const generatedAt = data.generated_at
-                    ? new Date(data.generated_at).toLocaleString('ru-RU')
-                    : '';
-                dailyDigest.classList.remove('hidden');
-                dailyDigest.innerHTML = `
-                    <h3>Ежедневная сводка фильмов</h3>
-                    ${generatedAt ? `<div class="daily-digest-meta">Обновлено: ${escapeHtml(generatedAt)}</div>` : ''}
-                    <div class="daily-digest-content">${escapeHtml(data.content)}</div>
-                `;
-            } catch (err) {
-                console.error('Ошибка загрузки сводки:', err);
-                dailyDigest.classList.add('hidden');
             }
         }
 
@@ -2242,364 +1411,6 @@
         function isValidProjectId(projectId) {
             return /^[\p{L}\p{N}\s\-_]+$/u.test(projectId);
         }
-
-        async function loadMemory(projectId) {
-            if (!projectId) return;
-            console.log('Загрузка памяти для проекта:', projectId);
-            memoryList.innerHTML = '<div class="empty-state" style="margin-top:0;font-size:12px;">Загрузка...</div>';
-            try {
-                const response = await fetch('/api/memory?project_id=' + encodeURIComponent(projectId));
-                const data = await response.json();
-                console.log('Загруженная память:', data);
-                if (!response.ok) {
-                    memoryList.innerHTML = '<div class="empty-state" style="margin-top:0;font-size:12px;color:#c53030;">Ошибка: ' + escapeHtml(data.error || 'Неизвестная ошибка') + '</div>';
-                    return;
-                }
-                memoryState = data;
-                renderMemoryList();
-                await loadInvariants(projectId);
-            } catch (err) {
-                console.error('Ошибка загрузки памяти:', err);
-                memoryList.innerHTML = '<div class="empty-state" style="margin-top:0;font-size:12px;color:#c53030;">Ошибка сети: ' + escapeHtml(err.message) + '</div>';
-            }
-        }
-
-        async function loadInvariants(projectId) {
-            if (!projectId) return;
-            try {
-                const response = await fetch('/api/invariants?project_id=' + encodeURIComponent(projectId));
-                const data = await response.json();
-                if (!response.ok) {
-                    console.error('Ошибка загрузки инвариантов:', data.error);
-                    invariantsState = [];
-                } else {
-                    invariantsState = data.invariants || [];
-                }
-            } catch (err) {
-                console.error('Ошибка загрузки инвариантов:', err);
-                invariantsState = [];
-            }
-            renderInvariants();
-        }
-
-        function updateMemoryPanel() {
-            const hasProject = projectIdInput.value.trim() !== '';
-            memoryPanel.classList.toggle('hidden', !hasProject);
-            updateMemoryCounters();
-            if (hasProject) {
-                renderMemoryList();
-            }
-        }
-
-        function updateInvariantsPanel() {
-            const hasProject = projectIdInput.value.trim() !== '';
-            invariantsPanel.classList.toggle('hidden', !hasProject);
-            if (hasProject) {
-                renderInvariants();
-            }
-        }
-
-        function countVisibleLongTerm() {
-            return ((memoryState.long_term || []).filter(e => e.type !== 'invariants_list')).length;
-        }
-
-        function updateMemoryCounters() {
-            document.getElementById('count-long_term').textContent = '(' + countVisibleLongTerm() + ')';
-            document.getElementById('count-working').textContent = '(' + (memoryState.working || []).length + ')';
-        }
-
-        function switchMemoryTab(level) {
-            activeMemoryTab = level;
-            memoryTabs.forEach(t => t.classList.toggle('active', t.dataset.tab === level));
-            renderMemoryList();
-        }
-
-        function renderMemoryList() {
-            updateMemoryCounters();
-            const entries = (memoryState[activeMemoryTab] || []).filter(e => e.type !== 'invariants_list');
-            memoryList.innerHTML = '';
-            if (entries.length === 0) {
-                memoryList.innerHTML = '<div class="empty-state" style="margin-top:0;font-size:12px;">Нет записей</div>';
-                return;
-            }
-            for (const entry of entries) {
-                const el = document.createElement('div');
-                el.className = 'memory-entry' + (entry.auto_generated ? ' auto-generated' : '');
-                const tags = (entry.tags || []).join(', ');
-                el.innerHTML = `
-                    <div class="memory-entry-header">
-                        <span class="memory-entry-title">${escapeHtml(entry.title)}</span>
-                        <div class="memory-entry-actions">
-                            <button type="button" data-id="${escapeHtml(entry.id)}">✎</button>
-                            <button type="button" class="delete" data-id="${escapeHtml(entry.id)}">×</button>
-                        </div>
-                    </div>
-                    ${entry.content ? `<div class="memory-entry-content">${escapeHtml(entry.content)}</div>` : ''}
-                    <div class="memory-entry-tags">
-                        ${entry.auto_generated ? '<span class="memory-entry-badge">авто • </span>' : ''}
-                        ${entry.type}${tags ? ' • ' + escapeHtml(tags) : ''}
-                    </div>
-                `;
-                el.querySelector('button:not(.delete)').addEventListener('click', () => editMemoryEntry(entry.id));
-                el.querySelector('button.delete').addEventListener('click', () => deleteMemoryEntry(entry.id));
-                memoryList.appendChild(el);
-            }
-        }
-
-        function renderInvariants() {
-            invariantsList.innerHTML = '';
-            if (invariantsState.length === 0) {
-                invariantsList.innerHTML = '<div class="empty-state" style="margin-top:0;font-size:12px;">Нет инвариантов</div>';
-                return;
-            }
-            const categoryNames = {
-                architecture: 'Архитектура',
-                technical_decision: 'Тех. решение',
-                stack: 'Стек',
-                business_rule: 'Бизнес-правило'
-            };
-            invariantsState.forEach((inv, index) => {
-                const el = document.createElement('div');
-                el.className = 'invariant-entry' + (inv.active ? '' : ' inactive');
-                el.innerHTML = `
-                    <div class="invariant-entry-header">
-                        <span class="invariant-entry-title">${escapeHtml(inv.title)}</span>
-                        <div class="invariant-entry-actions">
-                            <button type="button" data-index="${index}">✎</button>
-                            <button type="button" class="delete" data-index="${index}">×</button>
-                        </div>
-                    </div>
-                    <div class="invariant-entry-meta">[${escapeHtml(inv.severity)}] ${escapeHtml(categoryNames[inv.category] || inv.category)}${inv.active ? '' : ' • неактивен'}</div>
-                    ${inv.description ? `<div class="invariant-entry-description">${escapeHtml(inv.description)}</div>` : ''}
-                `;
-                el.querySelector('button:not(.delete)').addEventListener('click', () => openInvariantDialog(index));
-                el.querySelector('button.delete').addEventListener('click', () => deleteInvariant(index));
-                invariantsList.appendChild(el);
-            });
-        }
-
-        function openInvariantDialog(index = null) {
-            invariantsForm.reset();
-            invariantIndexInput.value = index !== null ? index : '';
-            if (index !== null && invariantsState[index]) {
-                const inv = invariantsState[index];
-                invariantsDialogTitle.textContent = 'Редактировать инвариант';
-                invariantTitleInput.value = inv.title || '';
-                invariantDescriptionInput.value = inv.description || '';
-                invariantCategoryInput.value = inv.category || 'architecture';
-                invariantSeverityInput.value = inv.severity || 'hard';
-                invariantActiveInput.checked = inv.active !== false;
-            } else {
-                invariantsDialogTitle.textContent = 'Новый инвариант';
-                invariantActiveInput.checked = true;
-            }
-            invariantsDialog.classList.remove('hidden');
-        }
-
-        async function deleteInvariant(index) {
-            if (!confirm('Удалить инвариант?')) return;
-            const newInvariants = invariantsState.slice();
-            newInvariants.splice(index, 1);
-            await saveInvariants(newInvariants);
-        }
-
-        async function saveInvariants(newInvariants) {
-            const projectId = projectIdInput.value.trim();
-            if (!projectId) return;
-            try {
-                const response = await fetch('/api/invariants', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ project_id: projectId, invariants: newInvariants })
-                });
-                const data = await response.json();
-                if (!response.ok) {
-                    alert('Ошибка сохранения инвариантов: ' + (data.error || 'Неизвестная ошибка'));
-                    return;
-                }
-                invariantsState = data.invariants || [];
-                renderInvariants();
-                await loadMemory(projectId);
-            } catch (err) {
-                alert('Ошибка сети: ' + err.message);
-            }
-        }
-
-        memoryTabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                switchMemoryTab(tab.dataset.tab);
-            });
-        });
-
-        function populateMemoryTypes(level, selectedType = '') {
-            memoryTypeInput.innerHTML = '';
-            for (const type of memoryTypes[level]) {
-                const option = document.createElement('option');
-                option.value = type.value;
-                option.textContent = type.label;
-                memoryTypeInput.appendChild(option);
-            }
-            memoryTypeInput.value = selectedType || memoryTypeInput.options[0]?.value || '';
-        }
-
-        memoryLevelInput.addEventListener('change', () => {
-            populateMemoryTypes(memoryLevelInput.value, memoryLevelInput.value === 'long_term' ? 'knowledge' : 'task');
-        });
-
-        addMemoryButton.addEventListener('click', () => {
-            openMemoryDialog();
-        });
-
-        function openMemoryDialog(entry = null, level = null, prefilledContent = '') {
-            memoryForm.reset();
-            const defaultLevel = level || activeMemoryTab || 'long_term';
-            memoryLevelInput.value = defaultLevel;
-
-            const defaultType = entry ? entry.type : (defaultLevel === 'long_term' ? 'knowledge' : 'task');
-            populateMemoryTypes(defaultLevel, defaultType);
-
-            if (entry) {
-                memoryDialogTitle.textContent = 'Редактировать запись';
-                memoryIdInput.value = entry.id;
-                memoryTitleInput.value = entry.title;
-                memoryContentInput.value = entry.content || '';
-                memoryTagsInput.value = (entry.tags || []).join(', ');
-            } else {
-                memoryDialogTitle.textContent = 'Новая запись';
-                memoryIdInput.value = '';
-                memoryContentInput.value = prefilledContent;
-            }
-            memoryDialog.classList.remove('hidden');
-        }
-
-        function editMemoryEntry(entryId) {
-            for (const level of ['long_term', 'working']) {
-                const entry = (memoryState[level] || []).find(e => e.id === entryId);
-                if (entry) {
-                    openMemoryDialog(entry, level);
-                    return;
-                }
-            }
-        }
-
-        async function deleteMemoryEntry(entryId) {
-            if (!confirm('Удалить запись?')) return;
-            try {
-                const response = await fetch('/api/memory/delete', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ project_id: projectIdInput.value.trim(), entry_id: entryId })
-                });
-                if (!response.ok) {
-                    const data = await response.json();
-                    alert('Ошибка удаления: ' + (data.error || 'Неизвестная ошибка'));
-                    return;
-                }
-                memoryState = await response.json();
-                renderMemoryList();
-            } catch (err) {
-                alert('Ошибка сети: ' + err.message);
-            }
-        }
-
-        memoryCancelButton.addEventListener('click', () => {
-            memoryDialog.classList.add('hidden');
-        });
-
-        memoryDialog.addEventListener('click', (e) => {
-            if (e.target === memoryDialog) {
-                memoryDialog.classList.add('hidden');
-            }
-        });
-
-        addInvariantButton.addEventListener('click', () => {
-            openInvariantDialog();
-        });
-
-        invariantCancelButton.addEventListener('click', () => {
-            invariantsDialog.classList.add('hidden');
-        });
-
-        invariantsDialog.addEventListener('click', (e) => {
-            if (e.target === invariantsDialog) {
-                invariantsDialog.classList.add('hidden');
-            }
-        });
-
-        invariantsForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const indexValue = invariantIndexInput.value;
-            const index = indexValue === '' ? -1 : parseInt(indexValue, 10);
-
-            const invariant = {
-                title: invariantTitleInput.value.trim(),
-                description: invariantDescriptionInput.value.trim(),
-                category: invariantCategoryInput.value,
-                severity: invariantSeverityInput.value,
-                active: invariantActiveInput.checked
-            };
-
-            if (!invariant.title) {
-                alert('Заголовок инварианта обязателен');
-                return;
-            }
-
-            const newInvariants = invariantsState.slice();
-            if (index >= 0 && index < newInvariants.length) {
-                newInvariants[index] = invariant;
-            } else {
-                newInvariants.push(invariant);
-            }
-
-            invariantsDialog.classList.add('hidden');
-            await saveInvariants(newInvariants);
-        });
-
-        memoryForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const projectId = projectIdInput.value.trim();
-            if (!projectId) {
-                alert('Сначала введите Project ID');
-                return;
-            }
-            const savedLevel = memoryLevelInput.value;
-            const title = memoryTitleInput.value.trim();
-            if (!title) {
-                alert('Заголовок обязателен');
-                return;
-            }
-            const entry = {
-                id: memoryIdInput.value || undefined,
-                type: memoryTypeInput.value,
-                title: title,
-                content: memoryContentInput.value.trim(),
-                tags: memoryTagsInput.value.split(',').map(t => t.trim()).filter(Boolean)
-            };
-            if (!entry.type) {
-                alert('Тип записи обязателен');
-                return;
-            }
-            console.log('Сохранение записи памяти:', { project_id: projectId, entry: entry });
-            try {
-                const response = await fetch('/api/memory', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ project_id: projectId, entry: entry })
-                });
-                const data = await response.json();
-                console.log('Ответ сохранения памяти:', data);
-                if (!response.ok) {
-                    alert('Ошибка сохранения: ' + (data.error || 'Неизвестная ошибка'));
-                    return;
-                }
-                memoryState = data;
-                memoryDialog.classList.add('hidden');
-                switchMemoryTab(savedLevel);
-            } catch (err) {
-                console.error('Ошибка сети при сохранении памяти:', err);
-                alert('Ошибка сети: ' + err.message);
-            }
-        });
 
         // --- MCP статус ---
 
@@ -2735,152 +1546,6 @@
 
         mcpRefreshButton.addEventListener('click', loadMCPStatus);
 
-        // --- Профили пользователей ---
-
-        async function loadProfiles() {
-            try {
-                const response = await fetch('/api/profiles');
-                if (!response.ok) {
-                    console.error('Ошибка загрузки профилей:', await response.text());
-                    return;
-                }
-                profiles = await response.json();
-                renderProfileSelect();
-            } catch (err) {
-                console.error('Ошибка загрузки профилей:', err);
-            }
-        }
-
-        function renderProfileSelect() {
-            const currentValue = profileSelect.value;
-            profileSelect.innerHTML = '<option value="">—</option>';
-            for (const p of profiles) {
-                const option = document.createElement('option');
-                option.value = p.id;
-                option.textContent = p.name;
-                profileSelect.appendChild(option);
-            }
-
-            const savedProfileId = localStorage.getItem('chat_profile_id');
-            if (savedProfileId && profiles.some(p => p.id === savedProfileId)) {
-                profileSelect.value = savedProfileId;
-            } else if (currentValue && profiles.some(p => p.id === currentValue)) {
-                profileSelect.value = currentValue;
-            } else {
-                profileSelect.value = '';
-                localStorage.removeItem('chat_profile_id');
-            }
-            updateProfileActions();
-        }
-
-        function updateProfileActions() {
-            const hasSelection = profileSelect.value !== '';
-            editProfileButton.disabled = !hasSelection;
-            deleteProfileButton.disabled = !hasSelection;
-        }
-
-        profileSelect.addEventListener('change', () => {
-            const profileId = profileSelect.value;
-            if (profileId) {
-                localStorage.setItem('chat_profile_id', profileId);
-            } else {
-                localStorage.removeItem('chat_profile_id');
-            }
-            updateProfileActions();
-        });
-
-        createProfileButton.addEventListener('click', () => {
-            openProfileDialog();
-        });
-
-        editProfileButton.addEventListener('click', () => {
-            const p = profiles.find(p => p.id === profileSelect.value);
-            if (p) {
-                openProfileDialog(p);
-            }
-        });
-
-        deleteProfileButton.addEventListener('click', async () => {
-            const profileId = profileSelect.value;
-            const p = profiles.find(p => p.id === profileId);
-            if (!p || !confirm('Удалить профиль "' + p.name + '"?')) return;
-            try {
-                const response = await fetch('/api/profiles/delete', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ profile_id: profileId })
-                });
-                if (!response.ok) {
-                    const data = await response.json();
-                    alert('Ошибка удаления: ' + (data.error || 'Неизвестная ошибка'));
-                    return;
-                }
-                profiles = await response.json();
-                profileSelect.value = '';
-                localStorage.removeItem('chat_profile_id');
-                renderProfileSelect();
-            } catch (err) {
-                alert('Ошибка сети: ' + err.message);
-            }
-        });
-
-        function openProfileDialog(p = null) {
-            profileForm.reset();
-            if (p) {
-                profileDialogTitle.textContent = 'Редактировать профиль';
-                profileIdInput.value = p.id;
-                profileNameInput.value = p.name;
-                profileDescriptionInput.value = p.description || '';
-            } else {
-                profileDialogTitle.textContent = 'Новый профиль';
-                profileIdInput.value = '';
-            }
-            profileDialog.classList.remove('hidden');
-        }
-
-        profileCancelButton.addEventListener('click', () => {
-            profileDialog.classList.add('hidden');
-        });
-
-        profileDialog.addEventListener('click', (e) => {
-            if (e.target === profileDialog) {
-                profileDialog.classList.add('hidden');
-            }
-        });
-
-        profileForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const name = profileNameInput.value.trim();
-            if (!name) {
-                alert('Имя профиля обязательно');
-                return;
-            }
-            const profileData = {
-                id: profileIdInput.value || undefined,
-                name: name,
-                description: profileDescriptionInput.value.trim()
-            };
-            try {
-                const response = await fetch('/api/profiles', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ profile: profileData })
-                });
-                const data = await response.json();
-                if (!response.ok) {
-                    alert('Ошибка сохранения: ' + (data.error || 'Неизвестная ошибка'));
-                    return;
-                }
-                profiles = data.profiles;
-                profileDialog.classList.add('hidden');
-                renderProfileSelect();
-                profileSelect.value = data.profile_id;
-                localStorage.setItem('chat_profile_id', data.profile_id);
-                updateProfileActions();
-            } catch (err) {
-                alert('Ошибка сети: ' + err.message);
-            }
-        });
         // --- База знаний ---
         function currentProjectId() {
             return projectIdInput.value.trim();

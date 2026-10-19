@@ -103,24 +103,6 @@ func TestHelpCommandUsageAndInvalidArg(t *testing.T) {
 	}
 }
 
-func TestHelpCommandWarnsInWorkflowMode(t *testing.T) {
-	store := newCommandTestStore(t)
-	client := &failingClient{}
-	a := NewSimpleAgent(Config{APIFormat: "openai", Model: "test"}, client).WithHistory(store)
-
-	resp, err := a.Run(AgentRequest{
-		Message:      "/help golang/go",
-		SessionID:    "s1",
-		WorkflowMode: WorkflowModeWorkflow,
-	})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if !strings.Contains(resp.Content, "workflow") {
-		t.Fatalf("нет предупреждения о workflow-режиме: %q", resp.Content)
-	}
-}
-
 func TestExitCommandClearsProject(t *testing.T) {
 	store := newCommandTestStore(t)
 	client := &failingClient{}

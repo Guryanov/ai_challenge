@@ -2,9 +2,7 @@ package main
 
 import (
 	"ai-chat/internal/agent"
-	"ai-chat/internal/history"
 	"ai-chat/internal/knowledge"
-	"ai-chat/internal/memory"
 )
 
 // chatRequest — входящий HTTP-запрос от фронтенда.
@@ -14,11 +12,9 @@ type chatRequest struct {
 	Role            string            `json:"role"`
 	SessionID       string            `json:"session_id"`
 	ProjectID       string            `json:"project_id"`
-	ProfileID       string            `json:"profile_id"`
 	ContextStrategy string            `json:"context_strategy"`
 	Facts           map[string]string `json:"facts"`
 	BranchAction    string            `json:"branch_action"`
-	WorkflowMode    string            `json:"workflow_mode"`
 	Temperature     *float64          `json:"temperature"`
 	MaxTokens       *int              `json:"max_tokens"`
 	StopSequence    string            `json:"stop_sequence"`
@@ -27,51 +23,28 @@ type chatRequest struct {
 	RAGTopK         int               `json:"rag_top_k"`
 	RAGCandidates   int               `json:"rag_candidates"`
 	RAGThreshold    *float64          `json:"rag_threshold"`
-	Ticket          *agent.Ticket     `json:"ticket"`
 }
 
 // chatResponse — HTTP-ответ фронтенду.
 type chatResponse struct {
-	User                string              `json:"user"`
-	Response            string              `json:"response"`
-	FinishReason        string              `json:"finish_reason,omitempty"`
-	DurationMs          int64               `json:"duration_ms,omitempty"`
-	PromptTokens        int                 `json:"prompt_tokens,omitempty"`
-	CompletionTokens    int                 `json:"completion_tokens,omitempty"`
-	TotalTokens         int                 `json:"total_tokens,omitempty"`
-	SessionTotalTokens  int                 `json:"session_total_tokens,omitempty"`
-	Compressed          bool                `json:"compressed,omitempty"`
-	ActiveBranch        string              `json:"active_branch,omitempty"`
-	Branches            []string            `json:"branches,omitempty"`
-	Facts               map[string]string   `json:"facts,omitempty"`
-	ProjectID           string              `json:"project_id,omitempty"`
-	ProfileID           string              `json:"profile_id,omitempty"`
-	TaskStage           string              `json:"task_stage,omitempty"`
-	TaskStatus          string              `json:"task_status,omitempty"`
-	TaskContext         history.TaskContext `json:"task_context,omitempty"`
-	Sources             []agent.SourceRef   `json:"sources,omitempty"`
-	RAGUsed             bool                `json:"rag_used,omitempty"`
-	ActiveGitHubProject string              `json:"active_github_project"`
-	ActiveGitBranch     string              `json:"active_git_branch"`
-	Error               string              `json:"error,omitempty"`
-}
-
-// invariantsRequest — запрос на сохранение инвариантов проекта.
-type invariantsRequest struct {
-	ProjectID  string             `json:"project_id"`
-	Invariants []memory.Invariant `json:"invariants"`
-}
-
-// invariantsResponse — ответ со списком инвариантов проекта.
-type invariantsResponse struct {
-	Invariants []memory.Invariant `json:"invariants"`
-}
-
-// digestResponse — ответ с ежедневной сводкой.
-type digestResponse struct {
-	Content     string `json:"content,omitempty"`
-	GeneratedAt string `json:"generated_at,omitempty"`
-	Error       string `json:"error,omitempty"`
+	User                string            `json:"user"`
+	Response            string            `json:"response"`
+	FinishReason        string            `json:"finish_reason,omitempty"`
+	DurationMs          int64             `json:"duration_ms,omitempty"`
+	PromptTokens        int               `json:"prompt_tokens,omitempty"`
+	CompletionTokens    int               `json:"completion_tokens,omitempty"`
+	TotalTokens         int               `json:"total_tokens,omitempty"`
+	SessionTotalTokens  int               `json:"session_total_tokens,omitempty"`
+	Compressed          bool              `json:"compressed,omitempty"`
+	ActiveBranch        string            `json:"active_branch,omitempty"`
+	Branches            []string          `json:"branches,omitempty"`
+	Facts               map[string]string `json:"facts,omitempty"`
+	ProjectID           string            `json:"project_id,omitempty"`
+	Sources             []agent.SourceRef `json:"sources,omitempty"`
+	RAGUsed             bool              `json:"rag_used,omitempty"`
+	ActiveGitHubProject string            `json:"active_github_project"`
+	ActiveGitBranch     string            `json:"active_git_branch"`
+	Error               string            `json:"error,omitempty"`
 }
 
 // kbFile — загруженный файл базы знаний.

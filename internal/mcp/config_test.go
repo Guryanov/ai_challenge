@@ -17,9 +17,9 @@ servers:
     args:
       - "-y"
       - "@modelcontextprotocol/server-filesystem"
-  deepwiki:
+  remote:
     type: sse
-    url: https://mcp.deepwiki.com/mcp
+    url: https://example.com/mcp
     headers:
       Accept: text/event-stream
 `
@@ -43,18 +43,18 @@ servers:
 		t.Fatal("expected default timeout")
 	}
 
-	dw, ok := cfg.Servers["deepwiki"]
+	remote, ok := cfg.Servers["remote"]
 	if !ok {
-		t.Fatal("expected deepwiki server")
+		t.Fatal("expected remote server")
 	}
-	if dw.Type != "sse" {
-		t.Fatalf("expected type sse, got %q", dw.Type)
+	if remote.Type != "sse" {
+		t.Fatalf("expected type sse, got %q", remote.Type)
 	}
-	if dw.URL != "https://mcp.deepwiki.com/mcp" {
-		t.Fatalf("unexpected url: %q", dw.URL)
+	if remote.URL != "https://example.com/mcp" {
+		t.Fatalf("unexpected url: %q", remote.URL)
 	}
-	if dw.Headers["Accept"] != "text/event-stream" {
-		t.Fatalf("unexpected headers: %v", dw.Headers)
+	if remote.Headers["Accept"] != "text/event-stream" {
+		t.Fatalf("unexpected headers: %v", remote.Headers)
 	}
 }
 

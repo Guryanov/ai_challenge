@@ -7,14 +7,10 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"ai-chat/internal/agent"
-	"ai-chat/internal/digest"
 	"ai-chat/internal/knowledge"
 	"ai-chat/internal/mcp"
-	"ai-chat/internal/memory"
-	"ai-chat/internal/profile"
 )
 
 //go:embed static/index.html
@@ -111,16 +107,9 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 		}
 		defer r.Body.Close()
 
-		if req.Message == "" && req.Ticket == nil {
+		if req.Message == "" {
 			writeError(w, http.StatusBadRequest, "Сообщение не может быть пустым")
 			return
-		}
-
-		if req.Ticket != nil {
-			if strings.TrimSpace(req.Ticket.UserName) == "" || strings.TrimSpace(req.Ticket.Question) == "" {
-				writeError(w, http.StatusBadRequest, "в тикете обязательны поля user_name и question")
-				return
-			}
 		}
 
 		result, err := a.Run(agent.AgentRequest{
@@ -129,11 +118,9 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			Role:            req.Role,
 			SessionID:       req.SessionID,
 			ProjectID:       req.ProjectID,
-			ProfileID:       req.ProfileID,
 			ContextStrategy: agent.ContextStrategy(req.ContextStrategy),
 			Facts:           req.Facts,
 			BranchAction:    req.BranchAction,
-			WorkflowMode:    req.WorkflowMode,
 			Temperature:     req.Temperature,
 			MaxTokens:       req.MaxTokens,
 			StopSequence:    req.StopSequence,
@@ -143,7 +130,6 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			RAGTopK:         req.RAGTopK,
 			RAGCandidates:   req.RAGCandidates,
 			RAGThreshold:    req.RAGThreshold,
-			Ticket:          req.Ticket,
 		})
 		if err != nil {
 			log.Printf("Ошибка агента: %v", err)
@@ -165,10 +151,6 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			Branches:            result.Branches,
 			Facts:               result.Facts,
 			ProjectID:           result.ProjectID,
-			ProfileID:           result.ProfileID,
-			TaskStage:           result.TaskStage,
-			TaskStatus:          result.TaskStatus,
-			TaskContext:         result.TaskContext,
 			Sources:             result.Sources,
 			RAGUsed:             result.RAGUsed,
 			ActiveGitHubProject: result.ActiveGitHubProject,
@@ -280,447 +262,6 @@ func handleSessionBranches(a agent.Agent) http.HandlerFunc {
 	}
 }
 
-func handleGetMemory(store memory.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		projectID := r.URL.Query().Get("project_id")
-		if projectID == "" {
-			writeError(w, http.StatusBadRequest, "project_id обязателен")
-			return
-		}
-
-		mem, err := store.Load(projectID)
-		if err != nil {
-			log.Printf("Ошибка загрузки памяти: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(mem); err != nil {
-			log.Printf("Ошибка кодирования ответа: %v", err)
-		}
-	}
-}
-
-// memorySummarizer запускает авто-summary долгосрочной памяти при необходимости.
-type memorySummarizer interface {
-	SummarizeMemoryIfNeeded(projectID string) (memory.Memory, error)
-}
-
-func handleUpsertMemory(store memory.Store, summarizer memorySummarizer) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		var req struct {
-			ProjectID string       `json:"project_id"`
-			Entry     memory.Entry `json:"entry"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
-			return
-		}
-		defer r.Body.Close()
-
-		if req.ProjectID == "" {
-			writeError(w, http.StatusBadRequest, "project_id обязателен")
-			return
-		}
-
-		mem, err := store.Load(req.ProjectID)
-		if err != nil {
-			log.Printf("Ошибка загрузки памяти: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		if err := memory.UpsertEntry(&mem, req.Entry); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-
-		if err := store.Save(req.ProjectID, mem); err != nil {
-			log.Printf("Ошибка сохранения памяти: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		// После сохранения проверяем необходимость авто-summary.
-		mem, err = summarizer.SummarizeMemoryIfNeeded(req.ProjectID)
-		if err != nil {
-			log.Printf("Ошибка авто-summary памяти: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(mem); err != nil {
-			log.Printf("Ошибка кодирования ответа: %v", err)
-		}
-	}
-}
-
-func handleDeleteMemory(store memory.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		var req struct {
-			ProjectID string `json:"project_id"`
-			EntryID   string `json:"entry_id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
-			return
-		}
-		defer r.Body.Close()
-
-		if req.ProjectID == "" {
-			writeError(w, http.StatusBadRequest, "project_id обязателен")
-			return
-		}
-		if req.EntryID == "" {
-			writeError(w, http.StatusBadRequest, "entry_id обязателен")
-			return
-		}
-
-		mem, err := store.Load(req.ProjectID)
-		if err != nil {
-			log.Printf("Ошибка загрузки памяти: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		if err := memory.DeleteEntry(&mem, req.EntryID); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-
-		if err := store.Save(req.ProjectID, mem); err != nil {
-			log.Printf("Ошибка сохранения памяти: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(mem); err != nil {
-			log.Printf("Ошибка кодирования ответа: %v", err)
-		}
-	}
-}
-
-func handleListInvariants(store memory.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		projectID := r.URL.Query().Get("project_id")
-		if projectID == "" {
-			writeError(w, http.StatusBadRequest, "project_id обязателен")
-			return
-		}
-
-		invariants, err := memory.LoadInvariants(store, projectID)
-		if err != nil {
-			log.Printf("Ошибка загрузки инвариантов: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(invariantsResponse{Invariants: invariants}); err != nil {
-			log.Printf("Ошибка кодирования ответа: %v", err)
-		}
-	}
-}
-
-func handleSaveInvariants(store memory.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		var req invariantsRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
-			return
-		}
-		defer r.Body.Close()
-
-		if req.ProjectID == "" {
-			writeError(w, http.StatusBadRequest, "project_id обязателен")
-			return
-		}
-
-		if err := memory.SaveInvariants(store, req.ProjectID, req.Invariants); err != nil {
-			log.Printf("Ошибка сохранения инвариантов: %v", err)
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-
-		invariants, err := memory.LoadInvariants(store, req.ProjectID)
-		if err != nil {
-			log.Printf("Ошибка загрузки инвариантов после сохранения: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(invariantsResponse{Invariants: invariants}); err != nil {
-			log.Printf("Ошибка кодирования ответа: %v", err)
-		}
-	}
-}
-
-func handleDeleteInvariants(store memory.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		var req struct {
-			ProjectID string `json:"project_id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
-			return
-		}
-		defer r.Body.Close()
-
-		if req.ProjectID == "" {
-			writeError(w, http.StatusBadRequest, "project_id обязателен")
-			return
-		}
-
-		if err := memory.DeleteInvariants(store, req.ProjectID); err != nil {
-			log.Printf("Ошибка удаления инвариантов: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(invariantsResponse{Invariants: []memory.Invariant{}}); err != nil {
-			log.Printf("Ошибка кодирования ответа: %v", err)
-		}
-	}
-}
-
-func handleDailyDigest(store digest.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		d, err := store.Load()
-		if err != nil {
-			log.Printf("Ошибка загрузки сводки: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		resp := digestResponse{}
-		if d.Error != "" {
-			resp.Error = d.Error
-		} else {
-			resp.Content = d.Content
-			if !d.GeneratedAt.IsZero() {
-				resp.GeneratedAt = d.GeneratedAt.Format(time.RFC3339)
-			}
-		}
-
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			log.Printf("Ошибка кодирования сводки: %v", err)
-		}
-	}
-}
-
-func handleListProfiles(store profile.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		profiles, err := store.List()
-		if err != nil {
-			log.Printf("Ошибка загрузки профилей: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(profiles); err != nil {
-			log.Printf("Ошибка кодирования ответа: %v", err)
-		}
-	}
-}
-
-func handleUpsertProfile(store profile.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		var req struct {
-			Profile profile.Profile `json:"profile"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
-			return
-		}
-		defer r.Body.Close()
-
-		if strings.TrimSpace(req.Profile.Name) == "" {
-			writeError(w, http.StatusBadRequest, "Имя профиля не может быть пустым")
-			return
-		}
-
-		profileID := req.Profile.ID
-		if profileID == "" {
-			profileID = profile.GenerateProfileID(req.Profile.Name)
-		}
-		if err := profile.ValidateProfileID(profileID); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-
-		if err := store.Save(profileID, req.Profile); err != nil {
-			log.Printf("Ошибка сохранения профиля: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		profiles, err := store.List()
-		if err != nil {
-			log.Printf("Ошибка загрузки профилей: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(map[string]interface{}{
-			"profile_id": profileID,
-			"profiles":   profiles,
-		}); err != nil {
-			log.Printf("Ошибка кодирования ответа: %v", err)
-		}
-	}
-}
-
-func handleDeleteProfile(store profile.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		var req struct {
-			ProfileID string `json:"profile_id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
-			return
-		}
-		defer r.Body.Close()
-
-		if req.ProfileID == "" {
-			writeError(w, http.StatusBadRequest, "profile_id обязателен")
-			return
-		}
-
-		if err := store.Delete(req.ProfileID); err != nil {
-			log.Printf("Ошибка удаления профиля: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		profiles, err := store.List()
-		if err != nil {
-			log.Printf("Ошибка загрузки профилей: %v", err)
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(profiles); err != nil {
-			log.Printf("Ошибка кодирования ответа: %v", err)
-		}
-	}
-}
-
-func handleTaskApprove(a agent.Agent) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		var req struct {
-			SessionID       string `json:"session_id"`
-			ContextStrategy string `json:"context_strategy"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
-			return
-		}
-		defer r.Body.Close()
-
-		result, err := a.Run(agent.AgentRequest{
-			SessionID:       req.SessionID,
-			TaskAction:      agent.TaskActionApprove,
-			ContextStrategy: agent.ContextStrategy(req.ContextStrategy),
-		})
-		if err != nil {
-			log.Printf("Ошибка утверждения этапа: %v", err)
-			writeError(w, http.StatusBadGateway, err.Error())
-			return
-		}
-
-		writeChatResponse(w, req.SessionID, result)
-	}
-}
-
-func handleTaskReject(a agent.Agent) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		var req struct {
-			SessionID       string `json:"session_id"`
-			Reason          string `json:"reason"`
-			ContextStrategy string `json:"context_strategy"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
-			return
-		}
-		defer r.Body.Close()
-
-		result, err := a.Run(agent.AgentRequest{
-			SessionID:       req.SessionID,
-			TaskAction:      agent.TaskActionReject,
-			RejectionReason: req.Reason,
-			ContextStrategy: agent.ContextStrategy(req.ContextStrategy),
-		})
-		if err != nil {
-			log.Printf("Ошибка отклонения этапа: %v", err)
-			writeError(w, http.StatusBadGateway, err.Error())
-			return
-		}
-
-		writeChatResponse(w, req.SessionID, result)
-	}
-}
-
-func handleTaskCancel(a agent.Agent) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		var req struct {
-			SessionID string `json:"session_id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Неверный формат запроса")
-			return
-		}
-		defer r.Body.Close()
-
-		result, err := a.Manage(agent.AgentRequest{
-			SessionID:  req.SessionID,
-			TaskAction: "cancel",
-		})
-		if err != nil {
-			log.Printf("Ошибка отмены задания: %v", err)
-			writeError(w, http.StatusBadGateway, err.Error())
-			return
-		}
-
-		writeChatResponse(w, req.SessionID, result)
-	}
-}
-
 // writeChatResponse формирует chatResponse из AgentResponse.
 func writeChatResponse(w http.ResponseWriter, userMessage string, result agent.AgentResponse) {
 	resp := chatResponse{
@@ -737,10 +278,6 @@ func writeChatResponse(w http.ResponseWriter, userMessage string, result agent.A
 		Branches:            result.Branches,
 		Facts:               result.Facts,
 		ProjectID:           result.ProjectID,
-		ProfileID:           result.ProfileID,
-		TaskStage:           result.TaskStage,
-		TaskStatus:          result.TaskStatus,
-		TaskContext:         result.TaskContext,
 		Sources:             result.Sources,
 		RAGUsed:             result.RAGUsed,
 		ActiveGitHubProject: result.ActiveGitHubProject,

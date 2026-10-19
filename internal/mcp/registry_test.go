@@ -1,40 +1,11 @@
 package mcp
 
 import (
-	"context"
 	"testing"
 
 	"ai-chat/internal/agent"
 	"github.com/mark3labs/mcp-go/mcp"
 )
-
-func TestResolveGitLabServer(t *testing.T) {
-	registry := NewRegistry(context.Background(), Config{Servers: map[string]ServerConfig{
-		"gitlab-main": {Type: "stdio", Command: "echo", Disabled: true},
-		"other":       {Type: "stdio", Command: "echo", Disabled: true},
-	}})
-	defer registry.CloseAll()
-
-	name, connected := registry.ResolveGitLabServer()
-	if name != "gitlab-main" {
-		t.Fatalf("ResolveGitLabServer name = %q, want gitlab-main", name)
-	}
-	if connected {
-		t.Fatal("disabled gitlab server must not be reported as connected")
-	}
-}
-
-func TestResolveGitLabServerMissing(t *testing.T) {
-	registry := NewRegistry(context.Background(), Config{Servers: map[string]ServerConfig{
-		"other": {Type: "stdio", Command: "echo", Disabled: true},
-	}})
-	defer registry.CloseAll()
-
-	name, connected := registry.ResolveGitLabServer()
-	if name != "" || connected {
-		t.Fatalf("ResolveGitLabServer = (%q, %t), want empty/false", name, connected)
-	}
-}
 
 func TestPrefixedToolName(t *testing.T) {
 	cases := []struct {

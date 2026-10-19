@@ -1,10 +1,5 @@
 package agent
 
-import (
-	"ai-chat/internal/memory"
-	"ai-chat/internal/profile"
-)
-
 // Config — настройки агента.
 type Config struct {
 	Model                    string
@@ -18,8 +13,6 @@ type Config struct {
 	OrchestratorInstructions string
 	Roles                    map[string]string
 	SummaryMaxTokens         int
-	MemoryStore              memory.Store
-	ProfileStore             profile.Store
 	KnowledgeRetriever       KnowledgeRetriever
 	RAGEnabled               bool
 	RAGStrategy              string
@@ -27,6 +20,4 @@ type Config struct {
 	RAGCandidates            int
 	RAGThreshold             float64
 	RAGMode                  string
-	// GitLabMCPServer — явное имя GitLab MCP-сервера; пусто — авто-определение.
-	GitLabMCPServer string
 }

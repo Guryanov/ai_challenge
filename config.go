@@ -17,7 +17,6 @@ const (
 	defaultModel            = "SMLab-ext/Kimi-K2.7-Code"
 	defaultTimeout          = 60 * time.Second
 	defaultSummaryMaxTokens = 500
-	defaultDigestAt         = "09:00"
 
 	defaultIndexDBPath      = "data/index.db"
 	defaultOllamaURL        = "http://localhost:11434"
@@ -54,14 +53,11 @@ type knowledgeConfig struct {
 }
 
 type serverConfig struct {
-	Port          string
-	Timeout       time.Duration
-	Agent         agent.Config
-	MCP           mcp.Config
-	DigestEnabled bool
-	DigestAt      string
-	DigestPrompt  string
-	Knowledge     knowledgeConfig
+	Port      string
+	Timeout   time.Duration
+	Agent     agent.Config
+	MCP       mcp.Config
+	Knowledge knowledgeConfig
 }
 
 func getEnvOrDefault(key, defaultValue string) string {
@@ -87,12 +83,9 @@ func loadConfig() serverConfig {
 	}
 
 	cfg := serverConfig{
-		Port:          os.Getenv("PORT"),
-		Timeout:       timeout,
-		MCP:           mcpCfg,
-		DigestEnabled: strings.ToLower(os.Getenv("DAILY_DIGEST_ENABLED")) == "true",
-		DigestAt:      getEnvOrDefault("DAILY_DIGEST_AT", defaultDigestAt),
-		DigestPrompt:  getEnvOrDefault("DAILY_DIGEST_PROMPT", defaultDigestPrompt()),
+		Port:    os.Getenv("PORT"),
+		Timeout: timeout,
+		MCP:     mcpCfg,
 		Agent: agent.Config{
 			ExternalAPI:              os.Getenv("EXTERNAL_API_URL"),
 			APIKey:                   os.Getenv("API_KEY"),
@@ -108,7 +101,6 @@ func loadConfig() serverConfig {
 			RAGEnabled:               parseBoolEnv("RAG_ENABLED", true),
 			RAGStrategy:              getEnvOrDefault("RAG_STRATEGY", defaultRAGStrategy),
 			RAGTopK:                  parseIntEnv("RAG_TOP_K", defaultSearchTopK),
-			GitLabMCPServer:          strings.TrimSpace(os.Getenv("GITLAB_MCP_SERVER")),
 		},
 	}
 
@@ -117,12 +109,6 @@ func loadConfig() serverConfig {
 	}
 	if cfg.Agent.ExternalAPI == "" {
 		cfg.Agent.ExternalAPI = defaultExternalAPI
-	}
-	if cfg.DigestEnabled {
-		if _, err := time.Parse("15:04", cfg.DigestAt); err != nil {
-			log.Printf("Предупреждение: неверный формат DAILY_DIGEST_AT=%q, используется значение по умолчанию %s", cfg.DigestAt, defaultDigestAt)
-			cfg.DigestAt = defaultDigestAt
-		}
 	}
 
 	cfg.Knowledge = loadKnowledgeConfig(cfg.Agent)
@@ -239,10 +225,6 @@ func deriveEmbedURL(chatURL string) string {
 		return chatURL + "/embeddings"
 	}
 	return chatURL
-}
-
-func defaultDigestPrompt() string {
-	return "Ты блогер, который составляет чарт фильмов, собери популярные фильмы за последние сутки и сделай сводку"
 }
 
 func parseBoolEnv(key string, defaultValue bool) bool {

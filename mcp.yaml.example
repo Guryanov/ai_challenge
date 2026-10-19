@@ -24,22 +24,10 @@ servers:
   #     - "@modelcontextprotocol/server-fetch"
   #   timeout: 30s
 
-  # deepwiki:
-  #   # DeepWiki использует Streamable HTTP транспорт.
+  # github:
+  #   # GitHub MCP используется для режима вопросов о репозитории (команды /help, /branches, /diff).
   #   type: http
-  #   url: https://mcp.deepwiki.com/mcp
-  #   # Accept: application/json, text/event-stream выставляется автоматически.
-  #   # При необходимости добавьте заголовки авторизации:
-  #   # headers:
-  #   #   Authorization: Bearer your-token
-  #   timeout: 30s
-
-  # gitlab:
-  #   # GitLab MCP используется для ответов на тикеты (см. README, раздел «Тикеты»).
-  #   # Имя сервера должно содержать "gitlab" — агент находит его автоматически;
-  #   # при другом имени задайте GITLAB_MCP_SERVER=<имя>.
-  #   type: http
-  #   url: https://gitlab.example.com/api/v4/mcp
+  #   url: https://api.githubcopilot.com/mcp/
   #   headers:
-  #     Authorization: Bearer <GITLAB_TOKEN>
+  #     Authorization: Bearer <GITHUB_TOKEN>
   #   timeout: 60s

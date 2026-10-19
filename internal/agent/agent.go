@@ -5,13 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"sort"
 	"strings"
 	"time"
 
 	"ai-chat/internal/history"
-	"ai-chat/internal/memory"
-	"ai-chat/internal/profile"
 )
 
 // SimpleAgent — базовая реализация LLM-агента.
@@ -22,8 +19,6 @@ type SimpleAgent struct {
 	config    Config
 	client    APIClient
 	history   history.Store
-	memory    memory.Store
-	profile   profile.Store
 	tools     ToolRegistry
 	knowledge KnowledgeRetriever
 }
@@ -33,8 +28,6 @@ func NewSimpleAgent(cfg Config, client APIClient) *SimpleAgent {
 	return &SimpleAgent{
 		config:    cfg,
 		client:    client,
-		memory:    cfg.MemoryStore,
-		profile:   cfg.ProfileStore,
 		knowledge: cfg.KnowledgeRetriever,
 	}
 }
@@ -42,18 +35,6 @@ func NewSimpleAgent(cfg Config, client APIClient) *SimpleAgent {
 // WithHistory добавляет хранилище истории.
 func (a *SimpleAgent) WithHistory(h history.Store) *SimpleAgent {
 	a.history = h
-	return a
-}
-
-// WithMemory добавляет хранилище памяти проекта.
-func (a *SimpleAgent) WithMemory(m memory.Store) *SimpleAgent {
-	a.memory = m
-	return a
-}
-
-// WithProfile добавляет хранилище профилей пользователей.
-func (a *SimpleAgent) WithProfile(p profile.Store) *SimpleAgent {
-	a.profile = p
 	return a
 }
 
@@ -96,12 +77,6 @@ func (a *SimpleAgent) Manage(req AgentRequest) (AgentResponse, error) {
 
 	if err := a.handleBranchAction(&session, req.BranchAction); err != nil {
 		return AgentResponse{}, err
-	}
-
-	if req.TaskAction == "cancel" {
-		session.TaskStage = ""
-		session.TaskStatus = ""
-		session.TaskContext = history.TaskContext{}
 	}
 
 	if err := a.history.SaveSession(req.SessionID, session); err != nil {
@@ -148,86 +123,29 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 		return AgentResponse{}, err
 	}
 
-	// Обновляем режим обработки, если пользователь его явно передал.
-	if req.WorkflowMode != "" {
-		session.WorkflowMode = req.WorkflowMode
-	}
-	workflowMode := effectiveWorkflowMode(session)
-
-	// Обработка тикета: вопрос берётся из тикета, проект — для RAG/памяти и GitLab MCP.
-	ticketContext := ""
-	if req.Ticket != nil {
-		t := req.Ticket
-		if strings.TrimSpace(t.UserName) == "" || strings.TrimSpace(t.Question) == "" {
-			return AgentResponse{}, fmt.Errorf("в тикете обязательны поля user_name и question")
-		}
-		if workflowMode == WorkflowModeWorkflow {
-			resp := AgentResponse{Content: ticketWorkflowNotice}
+	// Чат-команды обрабатываются до остальной логики. Детерминированные команды
+	// возвращают готовый ответ и не пишутся в историю диалога; команды, требующие
+	// инструментов, задают синтезированный запрос к LLM (commandLLMMessage).
+	commandLLMMessage := ""
+	if out, handled := handleCommand(&session, req.Message); handled {
+		if out.handled {
 			if a.history != nil && req.SessionID != "" {
 				if err := a.history.SaveSession(req.SessionID, session); err != nil {
 					return AgentResponse{}, err
 				}
 			}
-			resp.ActiveBranch = session.ActiveBranch
-			resp.Branches = branchNames(session.Branches)
-			resp.Facts = session.Facts
-			resp.ProjectID = req.ProjectID
-			resp.ProfileID = req.ProfileID
-			resp.ActiveGitHubProject = session.GitHubProject
-			resp.ActiveGitBranch = session.GitBranch
-			return resp, nil
+			out.response.ActiveBranch = session.ActiveBranch
+			out.response.Branches = branchNames(session.Branches)
+			out.response.Facts = session.Facts
+			out.response.ActiveGitHubProject = session.GitHubProject
+			out.response.ActiveGitBranch = session.GitBranch
+			return out.response, nil
 		}
-		if p := strings.TrimSpace(t.Project); p != "" {
-			req.ProjectID = p
-		}
-		req.Message = t.Question
-		serverName, serverConnected := a.gitlabServer()
-		ticketContext = formatTicketContext(*t, serverName, serverConnected)
+		commandLLMMessage = out.llmMessage
 	}
 
-	// Чат-команды обрабатываются до workflow/task-логики. Детерминированные
-	// команды возвращают готовый ответ и не пишутся в историю диалога; команды,
-	// требующие инструментов, задают синтезированный запрос к LLM (commandLLMMessage).
-	commandLLMMessage := ""
-	if req.TaskAction == "" && req.Ticket == nil {
-		if out, handled := handleCommand(&session, req.Message); handled {
-			if out.handled {
-				if a.history != nil && req.SessionID != "" {
-					if err := a.history.SaveSession(req.SessionID, session); err != nil {
-						return AgentResponse{}, err
-					}
-				}
-				out.response.ActiveBranch = session.ActiveBranch
-				out.response.Branches = branchNames(session.Branches)
-				out.response.Facts = session.Facts
-				out.response.ActiveGitHubProject = session.GitHubProject
-				out.response.ActiveGitBranch = session.GitBranch
-				return out.response, nil
-			}
-			commandLLMMessage = out.llmMessage
-		}
-	}
-
-	// Определяем состояние конечного автомата задачи.
 	originalUserMessage := req.Message
-	switch {
-	case originalUserMessage != "" && workflowMode == WorkflowModeWorkflow:
-		// Новый запрос пользователя сбрасывает текущее задание и начинает планирование.
-		resetTaskState(&session, originalUserMessage)
-	case originalUserMessage != "" && workflowMode == WorkflowModeChat:
-		// В режиме chat задачи не создаются, очищаем возможное состояние workflow.
-		clearTaskState(&session)
-	case req.TaskAction != "":
-		if workflowMode != WorkflowModeWorkflow {
-			return AgentResponse{}, fmt.Errorf("действия над задачами доступны только в режиме workflow")
-		}
-		// Утверждение или отклонение текущего этапа.
-		if err := applyTaskAction(&session, req.TaskAction, req.RejectionReason); err != nil {
-			return AgentResponse{}, err
-		}
-	case session.TaskStage != "" && session.TaskStatus == TaskStatusPending && workflowMode == WorkflowModeWorkflow:
-		// Продолжаем текущий этап (например, после перезагрузки страницы).
-	default:
+	if originalUserMessage == "" {
 		return AgentResponse{}, fmt.Errorf("сообщение не может быть пустым")
 	}
 
@@ -239,45 +157,15 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	}
 	session.TotalTokens += ctxResult.summaryTokens
 
-	// Загружаем профиль пользователя, если задан profile_id.
-	var userProfileContext string
-	if req.ProfileID != "" && a.profile != nil {
-		p, err := a.profile.Load(req.ProfileID)
-		if err != nil {
-			return AgentResponse{}, err
-		}
-		userProfileContext = formatUserProfileContext(p)
-	}
-
-	// Загружаем память проекта и инварианты, если задан project_id.
-	var projectContext string
-	var invariants []memory.Invariant
-	if req.ProjectID != "" && a.memory != nil {
-		mem, err := a.memory.Load(req.ProjectID)
-		if err != nil {
-			return AgentResponse{}, err
-		}
-		mem, err = a.summarizeLongTermMemoryIfNeeded(req.ProjectID, mem)
-		if err != nil {
-			return AgentResponse{}, err
-		}
-		projectContext = formatProjectContext(mem)
-		invariants, err = memory.LoadInvariants(a.memory, req.ProjectID)
-		if err != nil {
-			return AgentResponse{}, err
-		}
-	}
-	invariantContext := formatInvariantsContext(invariants)
-
-	// Контекст режима вопросов о GitHub-проекте. Инструменты доступны только в
-	// режиме chat при OpenAI-совместимом формате; иначе честно предупреждаем.
+	// Контекст режима вопросов о GitHub-проекте. Инструменты доступны при
+	// OpenAI-совместимом формате; иначе честно предупреждаем.
 	githubContext := ""
 	if session.GitHubProject != "" {
-		if workflowMode == WorkflowModeChat && a.tools != nil && a.config.APIFormat == "openai" {
+		if a.tools != nil && a.config.APIFormat == "openai" {
 			githubContext = formatGitHubProjectContext(session.GitHubProject)
 		} else {
 			githubContext = "Активный проект GitHub: " + session.GitHubProject + ".\n" +
-				"Инструменты GitHub MCP сейчас недоступны (нужны режим chat, подключённый сервер github и API_FORMAT=openai). " +
+				"Инструменты GitHub MCP сейчас недоступны (нужны подключённый сервер github и API_FORMAT=openai). " +
 				"Не выдумывай факты о проекте; если данных нет — прямо скажи об этом."
 		}
 		if session.GitBranch != "" {
@@ -299,7 +187,7 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	// В режиме chat при отсутствии релевантных фрагментов (ниже порога или
 	// ничего не найдено) ассистент обязан сказать «не знаю» и попросить
 	// уточнение — детерминированно, без вызова LLM.
-	if workflowMode == WorkflowModeChat && req.Ticket == nil && knowledge.applied && len(knowledge.chunks) == 0 && a.ragMode() != "none" {
+	if knowledge.applied && len(knowledge.chunks) == 0 && a.ragMode() != "none" {
 		refusal := AgentResponse{Content: ragRefusalMessage}
 		sessionTotal, err := a.saveHistory(req.SessionID, &session, originalUserMessage, refusal)
 		if err != nil {
@@ -310,10 +198,6 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 		refusal.Branches = branchNames(session.Branches)
 		refusal.Facts = session.Facts
 		refusal.ProjectID = req.ProjectID
-		refusal.ProfileID = req.ProfileID
-		refusal.TaskStage = session.TaskStage
-		refusal.TaskStatus = session.TaskStatus
-		refusal.TaskContext = session.TaskContext
 		refusal.ActiveGitHubProject = session.GitHubProject
 		refusal.ActiveGitBranch = session.GitBranch
 		return refusal, nil
@@ -325,30 +209,22 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 		messages = append([]history.Message{{Role: "system", Content: formatFacts(session.Facts)}}, messages...)
 	}
 
-	// Формируем сообщение для LLM: либо промпт этапа задачи, либо прямой запрос пользователя.
+	// Формируем сообщение для LLM: прямой запрос пользователя (или синтезированный
+	// промпт команды).
 	llmReq := req
-	if workflowMode == WorkflowModeWorkflow {
-		llmReq.Message = buildTaskStagePrompt(session, projectContext, userProfileContext, invariants)
-	} else {
-		llmReq.Message = effectiveUserMessage
-	}
-
-	workflowContext := ""
-	if workflowMode == WorkflowModeWorkflow {
-		workflowContext = formatWorkflowContext(session)
-	}
+	llmReq.Message = effectiveUserMessage
 
 	mainStart := time.Now()
 	var llmResp AgentResponse
 
-	usedTools := workflowMode == WorkflowModeChat && a.tools != nil && a.config.APIFormat == "openai"
+	usedTools := a.tools != nil && a.config.APIFormat == "openai"
 	if usedTools {
-		llmResp, err = a.runWithTools(&session, llmReq, originalUserMessage, messages, userProfileContext, projectContext, invariantContext, githubContext, ticketContext, workflowContext, knowledgeContext)
+		llmResp, err = a.runWithTools(&session, llmReq, originalUserMessage, messages, githubContext, knowledgeContext)
 		if err != nil {
 			return AgentResponse{}, err
 		}
 	} else {
-		onceResp, err := a.runOnce(llmReq, messages, nil, userProfileContext, projectContext, invariantContext, githubContext, ticketContext, workflowContext, knowledgeContext)
+		onceResp, err := a.runOnce(llmReq, messages, nil, githubContext, knowledgeContext)
 		if err != nil {
 			return AgentResponse{}, err
 		}
@@ -359,12 +235,6 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	llmResp.Compressed = strategy == StrategySummary && len(session.Branches[session.ActiveBranch].Messages) > 2
 	llmResp.Sources = toSourceRefs(knowledge.chunks)
 	llmResp.RAGUsed = len(knowledge.chunks) > 0
-
-	// В режиме workflow сохраняем результат этапа в контексте задачи.
-	if workflowMode == WorkflowModeWorkflow {
-		updateTaskContext(&session, llmResp.Content)
-		session.TaskStatus = TaskStatusPending
-	}
 
 	// Сохраняем новое сообщение пользователя и ответ ассистента.
 	// При использовании инструментов сообщения пользователя и tool-сообщения уже добавлены в ветку.
@@ -378,19 +248,10 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	}
 	llmResp.SessionTotalTokens = sessionTotal
 
-	// Детерминированное приветствие для ответа на тикет.
-	if req.Ticket != nil {
-		llmResp.Content = ticketGreeting(req.Ticket.UserName) + stripLeadingGreeting(llmResp.Content)
-	}
-
 	llmResp.ActiveBranch = session.ActiveBranch
 	llmResp.Branches = branchNames(session.Branches)
 	llmResp.Facts = session.Facts
 	llmResp.ProjectID = req.ProjectID
-	llmResp.ProfileID = req.ProfileID
-	llmResp.TaskStage = session.TaskStage
-	llmResp.TaskStatus = session.TaskStatus
-	llmResp.TaskContext = session.TaskContext
 	llmResp.ActiveGitHubProject = session.GitHubProject
 	llmResp.ActiveGitBranch = session.GitBranch
 
@@ -449,10 +310,6 @@ const knowledgeEmptyNote = "В базе знаний проекта не най�
 const ragRefusalMessage = "Не знаю. В базе знаний не нашлось достаточно релевантной информации по этому вопросу. " +
 	"Уточните, пожалуйста, вопрос или добавьте нужные документы."
 
-// ticketWorkflowNotice — уведомление, что тикеты обрабатываются только в режиме chat.
-const ticketWorkflowNotice = "Обработка тикетов доступна только в режиме chat. " +
-	"Переключите режим обработки на chat и прикрепите тикет снова."
-
 func (a *SimpleAgent) ragEnabled(req AgentRequest) bool {
 	if req.RAGEnabled != nil {
 		return *req.RAGEnabled
@@ -500,27 +357,9 @@ func (a *SimpleAgent) ragMode() string {
 	return strings.TrimSpace(a.config.RAGMode)
 }
 
-// gitlabServer возвращает имя GitLab MCP-сервера и признак подключения.
-// Явное имя из конфигурации имеет приоритет над авто-определением.
-func (a *SimpleAgent) gitlabServer() (string, bool) {
-	resolver, ok := a.tools.(GitLabServerResolver)
-	if name := strings.TrimSpace(a.config.GitLabMCPServer); name != "" {
-		if ok {
-			if discovered, connected := resolver.ResolveGitLabServer(); discovered == name {
-				return name, connected
-			}
-		}
-		return name, false
-	}
-	if ok {
-		return resolver.ResolveGitLabServer()
-	}
-	return "", false
-}
-
 // runOnce выполняет один вызов LLM и возвращает полный ответ, включая tool_calls.
-func (a *SimpleAgent) runOnce(req AgentRequest, history []history.Message, tools ToolRegistry, userProfileContext, projectContext, invariantContext, githubContext, ticketContext, workflowContext, knowledgeContext string) (LLMResponse, error) {
-	payload, err := buildPayload(a.config, req, history, tools, userProfileContext, projectContext, invariantContext, githubContext, ticketContext, workflowContext, knowledgeContext)
+func (a *SimpleAgent) runOnce(req AgentRequest, history []history.Message, tools ToolRegistry, githubContext, knowledgeContext string) (LLMResponse, error) {
+	payload, err := buildPayload(a.config, req, history, tools, githubContext, knowledgeContext)
 	if err != nil {
 		return LLMResponse{}, err
 	}
@@ -538,7 +377,7 @@ func (a *SimpleAgent) runOnce(req AgentRequest, history []history.Message, tools
 // userMessage — текст, сохраняемый в историю как реплика пользователя (для
 // команд это исходная команда, тогда как req.Message может быть синтезированным
 // промптом, который отправляется модели, но не показывается в истории).
-func (a *SimpleAgent) runWithTools(session *history.Session, req AgentRequest, userMessage string, baseMessages []history.Message, userProfileContext, projectContext, invariantContext, githubContext, ticketContext, workflowContext, knowledgeContext string) (AgentResponse, error) {
+func (a *SimpleAgent) runWithTools(session *history.Session, req AgentRequest, userMessage string, baseMessages []history.Message, githubContext, knowledgeContext string) (AgentResponse, error) {
 	const maxIterations = 10
 
 	branch := session.Branches[session.ActiveBranch]
@@ -551,7 +390,7 @@ func (a *SimpleAgent) runWithTools(session *history.Session, req AgentRequest, u
 
 	for i := 0; i < maxIterations; i++ {
 		conversation := append(baseMessages, turnMessages...)
-		llmResp, err := a.runOnce(req, conversation, a.tools, userProfileContext, projectContext, invariantContext, githubContext, ticketContext, workflowContext, knowledgeContext)
+		llmResp, err := a.runOnce(req, conversation, a.tools, githubContext, knowledgeContext)
 		if err != nil {
 			return AgentResponse{}, err
 		}
@@ -690,13 +529,6 @@ func (a *SimpleAgent) effectiveStrategy(session history.Session) ContextStrategy
 	return StrategyFull
 }
 
-func effectiveWorkflowMode(session history.Session) string {
-	if session.WorkflowMode != "" {
-		return session.WorkflowMode
-	}
-	return WorkflowModeChat
-}
-
 func formatFacts(facts map[string]string) string {
 	var b strings.Builder
 	b.WriteString("Известные факты:\n")
@@ -712,133 +544,6 @@ func branchNames(branches map[string]history.Branch) []string {
 		names = append(names, name)
 	}
 	return names
-}
-
-// formatProjectContext форматирует память проекта в системное сообщение для LLM.
-func formatProjectContext(mem memory.Memory) string {
-	groups := map[string][]memory.Entry{
-		"Принципы":       filterEntriesByType(mem.LongTerm, "principle"),
-		"Технологии":     filterEntriesByType(mem.LongTerm, "technology"),
-		"Паттерны":       filterEntriesByType(mem.LongTerm, "pattern"),
-		"Знания":         filterEntriesByType(mem.LongTerm, "knowledge"),
-		"Summary":        filterEntriesByType(mem.LongTerm, "summary"),
-		"Текущие задачи": filterEntriesByType(mem.Working, "task"),
-		"Сущности":       filterEntriesByType(mem.Working, "entity"),
-	}
-
-	var b strings.Builder
-	b.WriteString("Контекст проекта:\n")
-	hasAny := false
-	for title, entries := range groups {
-		if len(entries) == 0 {
-			continue
-		}
-		hasAny = true
-		b.WriteString("\n")
-		b.WriteString(title + ":\n")
-		for _, e := range entries {
-			line := e.Title
-			if e.Content != "" {
-				line += ": " + e.Content
-			}
-			b.WriteString("- ")
-			b.WriteString(line)
-			b.WriteString("\n")
-		}
-	}
-	if !hasAny {
-		return ""
-	}
-	return strings.TrimSpace(b.String())
-}
-
-func filterEntriesByType(entries []memory.Entry, entryType string) []memory.Entry {
-	var result []memory.Entry
-	for _, e := range entries {
-		if e.Type == entryType {
-			result = append(result, e)
-		}
-	}
-	// Стабильная сортировка по времени создания.
-	sort.SliceStable(result, func(i, j int) bool {
-		return result[i].CreatedAt.Before(result[j].CreatedAt)
-	})
-	return result
-}
-
-// SummarizeMemoryIfNeeded проверяет и при необходимости выполняет авто-summary
-// долгосрочной памяти проекта.
-func (a *SimpleAgent) SummarizeMemoryIfNeeded(projectID string) (memory.Memory, error) {
-	if a.memory == nil {
-		return memory.Memory{}, nil
-	}
-	mem, err := a.memory.Load(projectID)
-	if err != nil {
-		return memory.Memory{}, err
-	}
-	return a.summarizeLongTermMemoryIfNeeded(projectID, mem)
-}
-
-// summarizeLongTermMemoryIfNeeded сворачивает самые старые записи долгосрочной памяти,
-// если их количество превышает порог.
-func (a *SimpleAgent) summarizeLongTermMemoryIfNeeded(projectID string, mem memory.Memory) (memory.Memory, error) {
-	oldest, _ := memory.OldestLongTerm(mem)
-	if len(oldest) == 0 {
-		return mem, nil
-	}
-
-	// Инварианты нельзя сворачивать в summary — они должны оставаться доступными verbatim.
-	var summarizable []memory.Entry
-	for _, e := range oldest {
-		if e.Type != memory.InvariantsEntryType {
-			summarizable = append(summarizable, e)
-		}
-	}
-	if len(summarizable) == 0 {
-		return mem, nil
-	}
-
-	payload, err := buildMemorySummaryPayload(a.config, summarizable)
-	if err != nil {
-		return mem, fmt.Errorf("ошибка построения запроса summary памяти: %w", err)
-	}
-
-	body, err := a.client.Call(payload)
-	if err != nil {
-		return mem, fmt.Errorf("ошибка генерации summary памяти: %w", err)
-	}
-
-	summaryResp := extractResponse(a.config.APIFormat, "text", body)
-	summaryText := strings.TrimSpace(summaryResp.Content)
-	if summaryText == "" {
-		summaryText = "Summary предыдущих записей долгосрочной памяти."
-	}
-
-	summaryEntry := memory.Entry{
-		Type:          "summary",
-		Title:         fmt.Sprintf("Summary %d записей", len(summarizable)),
-		Content:       summaryText,
-		AutoGenerated: true,
-	}
-
-	summarizableIDs := make(map[string]struct{}, len(summarizable))
-	for _, e := range summarizable {
-		summarizableIDs[e.ID] = struct{}{}
-	}
-	var result []memory.Entry
-	for _, e := range mem.LongTerm {
-		if _, ok := summarizableIDs[e.ID]; ok {
-			continue
-		}
-		result = append(result, e)
-	}
-	mem.LongTerm = append(result, summaryEntry)
-
-	if err := a.memory.Save(projectID, mem); err != nil {
-		return mem, fmt.Errorf("ошибка сохранения памяти после summary: %w", err)
-	}
-
-	return mem, nil
 }
 
 // summarize отправляет старые сообщения в LLM и возвращает их summary.
