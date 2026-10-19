@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 
 	"ai-chat/internal/agent"
 	"ai-chat/internal/mcp"
+	"ai-chat/internal/pipeline"
 	"gopkg.in/yaml.v3"
 )
 
@@ -33,7 +35,20 @@ const (
 	defaultSearchCandidates = 20
 	defaultRerankMode       = "threshold"
 	defaultRerankThreshold  = 0.35
+
+	defaultPipelineAt          = "09:00"
+	defaultSentryQuery         = "is:unresolved level:fatal"
+	defaultRepoBaseBranch      = "main"
+	defaultRepoProjectID       = "repo"
+	defaultRepoIndexMaxFileKB  = 256
+	defaultJiraIssueType       = "Task"
+	defaultMaxIssuesPerRun     = 1
+	defaultMaxFilesPerFix      = 3
+	defaultRepoIndexExtensions = ".go,.md,.yaml,.yml,.json,.txt,.html,.css,.js,.sh,.sql"
 )
+
+// pipelineConfig — настройки конвейера Sentry → Jira → фикс → PR.
+type pipelineConfig = pipeline.Config
 
 type knowledgeConfig struct {
 	IndexDBPath     string
@@ -58,6 +73,7 @@ type serverConfig struct {
 	Agent     agent.Config
 	MCP       mcp.Config
 	Knowledge knowledgeConfig
+	Pipeline  pipelineConfig
 }
 
 func getEnvOrDefault(key, defaultValue string) string {
@@ -112,6 +128,7 @@ func loadConfig() serverConfig {
 	}
 
 	cfg.Knowledge = loadKnowledgeConfig(cfg.Agent)
+	cfg.Pipeline = loadPipelineConfig()
 
 	// RAG-параметры второго этапа берём из настроек базы знаний.
 	cfg.Agent.RAGCandidates = cfg.Knowledge.Candidates
@@ -301,4 +318,70 @@ func loadRoles() map[string]string {
 	}
 
 	return config.Roles
+}
+
+// loadPipelineConfig собирает настройки конвейера Sentry → Jira → фикс → PR.
+func loadPipelineConfig() pipelineConfig {
+	at := getEnvOrDefault("PIPELINE_AT", defaultPipelineAt)
+	if _, err := time.Parse("15:04", at); err != nil {
+		log.Printf("Предупреждение: неверный PIPELINE_AT=%q, используется %s", at, defaultPipelineAt)
+		at = defaultPipelineAt
+	}
+
+	return pipelineConfig{
+		Enabled:         parseBoolEnv("PIPELINE_ENABLED", false),
+		At:              at,
+		SentryQuery:     getEnvOrDefault("SENTRY_ISSUE_QUERY", defaultSentryQuery),
+		SentryOrg:       strings.TrimSpace(os.Getenv("SENTRY_ORGANIZATION")),
+		SentryProject:   strings.TrimSpace(os.Getenv("SENTRY_PROJECT")),
+		RepoOwner:       strings.TrimSpace(os.Getenv("REPO_OWNER")),
+		RepoName:        strings.TrimSpace(os.Getenv("REPO_NAME")),
+		BaseBranch:      getEnvOrDefault("REPO_BASE_BRANCH", defaultRepoBaseBranch),
+		Root:            getEnvOrDefault("REPO_ROOT", "."),
+		ProjectID:       getEnvOrDefault("REPO_PROJECT_ID", defaultRepoProjectID),
+		IndexOnStart:    parseBoolEnv("REPO_INDEX_ON_START", true),
+		IndexExtensions: parseCSVEnv("REPO_INDEX_EXTENSIONS", defaultRepoIndexExtensions),
+		IndexMaxFileKB:  parseIntEnv("REPO_INDEX_MAX_FILE_KB", defaultRepoIndexMaxFileKB),
+		JiraProjectKey:  strings.TrimSpace(os.Getenv("JIRA_PROJECT_KEY")),
+		JiraIssueType:   getEnvOrDefault("JIRA_ISSUE_TYPE", defaultJiraIssueType),
+		MaxIssuesPerRun: parseIntEnv("PIPELINE_MAX_ISSUES_PER_RUN", defaultMaxIssuesPerRun),
+		MaxFilesPerFix:  parseIntEnv("PIPELINE_MAX_FILES_PER_FIX", defaultMaxFilesPerFix),
+	}
+}
+
+// validatePipeline сообщает, каких обязательных настроек не хватает.
+func validatePipeline(cfg pipelineConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+	var missing []string
+	if cfg.RepoOwner == "" {
+		missing = append(missing, "REPO_OWNER")
+	}
+	if cfg.RepoName == "" {
+		missing = append(missing, "REPO_NAME")
+	}
+	if cfg.JiraProjectKey == "" {
+		missing = append(missing, "JIRA_PROJECT_KEY")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("PIPELINE_ENABLED=true, но не заданы: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+// parseCSVEnv разбирает список значений через запятую.
+func parseCSVEnv(key, defaultValue string) []string {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		v = defaultValue
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

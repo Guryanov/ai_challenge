@@ -11,6 +11,7 @@ import (
 	"ai-chat/internal/agent"
 	"ai-chat/internal/knowledge"
 	"ai-chat/internal/mcp"
+	"ai-chat/internal/pipeline"
 )
 
 //go:embed static/index.html
@@ -287,6 +288,53 @@ func writeChatResponse(w http.ResponseWriter, userMessage string, result agent.A
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Printf("Ошибка кодирования ответа: %v", err)
+	}
+}
+
+// --- Конвейер Sentry → Jira → фикс → PR ---
+
+// handlePipelineRun запускает один проход конвейера. При ?dry_run=true
+// мутирующие вызовы (Jira/GitHub) не выполняются.
+func handlePipelineRun(orch *pipeline.Orchestrator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		dryRun := r.URL.Query().Get("dry_run") == "true" || r.URL.Query().Get("dry_run") == "1"
+
+		res, err := orch.RunOnce(r.Context(), dryRun)
+		if err != nil {
+			log.Printf("Ошибка конвейера: %v", err)
+			w.WriteHeader(http.StatusBadGateway)
+			if encErr := json.NewEncoder(w).Encode(res); encErr != nil {
+				log.Printf("Ошибка кодирования результата конвейера: %v", encErr)
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
+	}
+}
+
+// handlePipelineStatus возвращает настройки конвейера, последний запуск
+// и список обработанных issue.
+func handlePipelineStatus(orch *pipeline.Orchestrator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+		cfg := orch.Config()
+		resp := pipelineStatusResponse{
+			Enabled:    cfg.Enabled,
+			At:         cfg.At,
+			ProjectID:  cfg.ProjectID,
+			BaseBranch: cfg.BaseBranch,
+			Items:      orch.Records(),
+		}
+		if last, ok := orch.LastRun(); ok {
+			resp.Last = &last
+		}
+		if resp.Items == nil {
+			resp.Items = []pipeline.Record{}
+		}
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 

@@ -258,6 +258,31 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	return llmResp, nil
 }
 
+// Complete выполняет одиночный вызов LLM без инструментов и истории диалога.
+// Используется фоновым конвейером: RAG-контекст подмешивается по req.ProjectID,
+// если он задан. Детерминированный отказ «Не знаю» здесь не применяется —
+// решение о дальнейших шагах принимает вызывающая сторона.
+func (a *SimpleAgent) Complete(req AgentRequest) (AgentResponse, error) {
+	if strings.TrimSpace(req.Message) == "" {
+		return AgentResponse{}, fmt.Errorf("сообщение не может быть пустым")
+	}
+
+	knowledge := a.retrieveKnowledgeContext(req, req.Message)
+
+	mainStart := time.Now()
+	llmResp, err := a.runOnce(req, nil, nil, "", knowledge.context)
+	if err != nil {
+		return AgentResponse{}, err
+	}
+
+	resp := llmResp.AgentResponse
+	resp.Duration = time.Since(mainStart)
+	resp.Sources = toSourceRefs(knowledge.chunks)
+	resp.RAGUsed = len(knowledge.chunks) > 0
+	resp.ProjectID = req.ProjectID
+	return resp, nil
+}
+
 // knowledgeResult — результат RAG-поиска для одного запроса.
 // applied означает, что RAG применим (включён, есть проект и запрос) и поиск
 // прошёл без ошибок; chunks — фрагменты, прошедшие порог релевантности.

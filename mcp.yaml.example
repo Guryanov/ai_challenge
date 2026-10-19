@@ -31,3 +31,29 @@ servers:
   #   headers:
   #     Authorization: Bearer <GITHUB_TOKEN>
   #   timeout: 60s
+
+  # sentry:
+  #   # Sentry MCP используется конвейером: чтение критических issue (level:fatal).
+  #   # Требуется Node/npx. Токен — user auth token Sentry с доступом на чтение.
+  #   type: stdio
+  #   command: npx
+  #   args:
+  #     - "-y"
+  #     - "@sentry/mcp-server@latest"
+  #   env:
+  #     SENTRY_ACCESS_TOKEN: "<SENTRY_TOKEN>"
+  #     # SENTRY_HOST: "https://sentry.example.com"   # для self-hosted
+  #   timeout: 60s
+
+  # jira:
+  #   # Jira MCP (mcp-atlassian) используется конвейером для создания тикетов.
+  #   # Требуется uv/uvx. JIRA_API_TOKEN — API-токен Atlassian.
+  #   type: stdio
+  #   command: uvx
+  #   args:
+  #     - "mcp-atlassian"
+  #   env:
+  #     JIRA_URL: "https://<org>.atlassian.net"
+  #     JIRA_USERNAME: "<email>"
+  #     JIRA_API_TOKEN: "<JIRA_TOKEN>"
+  #   timeout: 60s

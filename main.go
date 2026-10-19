@@ -4,12 +4,15 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"path/filepath"
+	"time"
 
 	"ai-chat/internal/agent"
 	"ai-chat/internal/embed"
 	"ai-chat/internal/history"
 	"ai-chat/internal/knowledge"
 	"ai-chat/internal/mcp"
+	"ai-chat/internal/pipeline"
 )
 
 func main() {
@@ -74,6 +77,41 @@ func main() {
 	log.Printf("RAG: включён=%t, стратегия=%s, кандидаты=%d, top-K=%d, режим=%s, порог=%.2f",
 		cfg.Agent.RAGEnabled, cfg.Agent.RAGStrategy, cfg.Agent.RAGCandidates, cfg.Agent.RAGTopK, cfg.Agent.RAGMode, cfg.Agent.RAGThreshold)
 
+	// Конвейер Sentry → Jira → фикс → PR.
+	if err := validatePipeline(cfg.Pipeline); err != nil {
+		log.Fatalf("Ошибка конфигурации конвейера: %v", err)
+	}
+
+	pipelineStore, err := pipeline.NewFileStore(filepath.Join("data", "pipeline", "state.json"))
+	if err != nil {
+		log.Fatalf("Ошибка создания хранилища состояния конвейера: %v", err)
+	}
+
+	orchestrator := pipeline.NewOrchestrator(
+		cfg.Pipeline,
+		mcpRegistry,
+		mcpCatalog{registry: mcpRegistry},
+		llmAgent,
+		newKBRetriever(kbService),
+		pipelineStore,
+	)
+
+	repoIndexer := pipeline.NewIndexer(kbService, cfg.Pipeline.Root, cfg.Pipeline.ProjectID, cfg.Pipeline.IndexExtensions, cfg.Pipeline.IndexMaxFileKB)
+	if cfg.Pipeline.IndexOnStart {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+			defer cancel()
+			if _, err := repoIndexer.Index(ctx); err != nil {
+				log.Printf("[pipeline] индексация кода при старте не удалась: %v", err)
+			}
+		}()
+	}
+
+	pipelineScheduler := pipeline.NewScheduler(orchestrator, cfg.Pipeline.At, cfg.Pipeline.Enabled)
+	pipelineScheduler.Start()
+	defer pipelineScheduler.Stop()
+	log.Printf("Конвейер: включён=%t, расписание=%s, проект RAG=%s", cfg.Pipeline.Enabled, cfg.Pipeline.At, cfg.Pipeline.ProjectID)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", serveIndex)
 	mux.HandleFunc("GET /api/mcp/status", handleMCPStatus(mcpRegistry))
@@ -83,6 +121,8 @@ func main() {
 	mux.HandleFunc("POST /api/chat/clear", handleClearHistory(llmAgent))
 	mux.HandleFunc("POST /api/session/facts", handleSessionFacts(llmAgent))
 	mux.HandleFunc("POST /api/session/branches", handleSessionBranches(llmAgent))
+	mux.HandleFunc("POST /api/pipeline/run", handlePipelineRun(orchestrator))
+	mux.HandleFunc("GET /api/pipeline/status", handlePipelineStatus(orchestrator))
 
 	mux.HandleFunc("POST /api/kb/files", handleKBUpload(kbService, cfg.Knowledge.MaxUploadBytes))
 	mux.HandleFunc("POST /api/kb/text", handleKBText(kbService))
@@ -108,4 +148,27 @@ func main() {
 	if err := http.ListenAndServe(addr, loggingMiddleware(mux)); err != nil {
 		log.Fatalf("Ошибка запуска сервера: %v", err)
 	}
+}
+
+// mcpCatalog адаптирует реестр MCP под pipeline.ToolCatalog.
+type mcpCatalog struct {
+	registry *mcp.Registry
+}
+
+// Catalog перечисляет инструменты подключённых MCP-серверов.
+func (c mcpCatalog) Catalog() []pipeline.ServerTool {
+	if c.registry == nil {
+		return nil
+	}
+
+	statuses := c.registry.Status()
+	out := make([]pipeline.ServerTool, 0, len(statuses))
+	for _, s := range statuses {
+		tools := make([]string, 0, len(s.Tools))
+		for _, t := range s.Tools {
+			tools = append(tools, t.Name)
+		}
+		out = append(out, pipeline.ServerTool{Server: s.Name, Tools: tools})
+	}
+	return out
 }

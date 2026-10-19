@@ -3,6 +3,7 @@ package main
 import (
 	"ai-chat/internal/agent"
 	"ai-chat/internal/knowledge"
+	"ai-chat/internal/pipeline"
 )
 
 // chatRequest — входящий HTTP-запрос от фронтенда.
@@ -131,4 +132,14 @@ type kbBenchmarkRequest struct {
 // kbBenchmarkResponse — результаты оценки стратегий.
 type kbBenchmarkResponse struct {
 	Runs []knowledge.BenchmarkRun `json:"runs"`
+}
+
+// pipelineStatusResponse — статус конвейера Sentry → Jira → фикс → PR.
+type pipelineStatusResponse struct {
+	Enabled    bool                `json:"enabled"`
+	At         string              `json:"at"`
+	ProjectID  string              `json:"project_id"`
+	BaseBranch string              `json:"base_branch"`
+	Last       *pipeline.RunResult `json:"last,omitempty"`
+	Items      []pipeline.Record   `json:"items"`
 }

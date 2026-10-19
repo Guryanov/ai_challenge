@@ -667,6 +667,67 @@
         .rag-toggle input {
             width: auto;
         }
+        .pipeline-actions {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .pipeline-actions button {
+            flex: 1;
+            padding: 8px 10px;
+            border: none;
+            border-radius: 6px;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .pipeline-actions button.secondary {
+            background-color: #6c757d;
+        }
+        .pipeline-status {
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        .pipeline-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 6px 8px;
+            font-size: 12px;
+            background-color: #f8f9fa;
+            margin-bottom: 6px;
+        }
+        .pipeline-item .pipeline-item-title {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .pipeline-item .pipeline-item-meta {
+            color: #777;
+            word-break: break-word;
+        }
+        .pipeline-item a {
+            color: #007bff;
+            word-break: break-all;
+        }
+        .pipeline-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-size: 11px;
+            color: #fff;
+            background-color: #6c757d;
+        }
+        .pipeline-badge.pr_created {
+            background-color: #28a745;
+        }
+        .pipeline-badge.needs_manual_fix {
+            background-color: #ffc107;
+            color: #333;
+        }
+        .pipeline-badge.failed {
+            background-color: #dc3545;
+        }
     </style>
 </head>
 <body>
@@ -766,6 +827,18 @@
                 <button type="button" id="mcp-refresh" class="mcp-refresh">Обновить</button>
             </div>
             <div id="mcp-status">Загрузка...</div>
+        </div>
+
+        <div id="pipeline-panel" class="tool-group">
+            <div class="mcp-header">
+                <h2>Конвейер Sentry → Jira</h2>
+                <button type="button" id="pipeline-refresh" class="mcp-refresh">Обновить</button>
+            </div>
+            <div class="pipeline-actions">
+                <button type="button" id="pipeline-run-dry" class="secondary">Dry-run</button>
+                <button type="button" id="pipeline-run">Запустить</button>
+            </div>
+            <div id="pipeline-status" class="pipeline-status">Загрузка...</div>
         </div>
 
         <div id="kb-panel" class="tool-group hidden">
@@ -880,6 +953,11 @@
 
         const mcpStatusContainer = document.getElementById('mcp-status');
         const mcpRefreshButton = document.getElementById('mcp-refresh');
+
+        const pipelineStatus = document.getElementById('pipeline-status');
+        const pipelineRefreshButton = document.getElementById('pipeline-refresh');
+        const pipelineRunButton = document.getElementById('pipeline-run');
+        const pipelineRunDryButton = document.getElementById('pipeline-run-dry');
 
         const kbPanel = document.getElementById('kb-panel');
         const kbOpenButton = document.getElementById('kb-open');
@@ -1545,6 +1623,102 @@
         }
 
         mcpRefreshButton.addEventListener('click', loadMCPStatus);
+
+        // --- Конвейер Sentry → Jira → фикс → PR ---
+
+        async function loadPipelineStatus() {
+            pipelineStatus.textContent = 'Загрузка...';
+            try {
+                const response = await fetch('/api/pipeline/status');
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+                renderPipelineStatus(await response.json());
+            } catch (err) {
+                console.error('Ошибка загрузки статуса конвейера:', err);
+                pipelineStatus.textContent = 'Ошибка загрузки';
+            }
+        }
+
+        function renderPipelineStatus(data) {
+            pipelineStatus.innerHTML = '';
+
+            const head = document.createElement('div');
+            head.className = 'pipeline-status';
+            head.textContent = `Включён: ${data.enabled ? 'да' : 'нет'} · расписание ${data.at || ''} · `
+                + `ветка ${data.base_branch || ''} · RAG ${data.project_id || ''}`;
+            pipelineStatus.appendChild(head);
+
+            if (data.last) {
+                const last = data.last;
+                const lastEl = document.createElement('div');
+                lastEl.className = 'pipeline-status';
+                let text = `Последний запуск${last.dry_run ? ' (dry-run)' : ''}: `
+                    + `найдено ${last.fetched}, обработано ${last.processed}`;
+                if (last.error) {
+                    text += ` · ошибка: ${last.error}`;
+                }
+                lastEl.textContent = text;
+                pipelineStatus.appendChild(lastEl);
+            }
+
+            const items = data.items || [];
+            if (items.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'mcp-empty';
+                empty.textContent = 'Пока нет обработанных issue';
+                pipelineStatus.appendChild(empty);
+                return;
+            }
+
+            for (const item of items) {
+                const el = document.createElement('div');
+                el.className = 'pipeline-item';
+
+                const jira = item.jira_key && item.jira_key !== '<dry-run>'
+                    ? ` · ${escapeHtml(item.jira_key)}` : '';
+                const branch = item.branch ? ` · ${escapeHtml(item.branch)}` : '';
+                const pr = item.pr_url
+                    ? ` · <a href="${escapeHtml(item.pr_url)}" target="_blank" rel="noopener">PR</a>` : '';
+                const err = item.error
+                    ? `<div class="pipeline-item-meta">${escapeHtml(item.error)}</div>` : '';
+
+                el.innerHTML = `
+                    <div class="pipeline-item-title">${escapeHtml(item.title || item.issue_id)}
+                        <span class="pipeline-badge ${escapeHtml(item.status)}">${escapeHtml(item.status)}</span>
+                    </div>
+                    <div class="pipeline-item-meta">issue ${escapeHtml(item.issue_id)}${jira}${branch}${pr}</div>
+                    ${err}
+                `;
+                pipelineStatus.appendChild(el);
+            }
+        }
+
+        async function runPipeline(dryRun) {
+            pipelineRunButton.disabled = true;
+            pipelineRunDryButton.disabled = true;
+            pipelineStatus.textContent = 'Запуск...';
+            try {
+                const url = dryRun ? '/api/pipeline/run?dry_run=true' : '/api/pipeline/run';
+                const response = await fetch(url, { method: 'POST' });
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+                await loadPipelineStatus();
+            } catch (err) {
+                console.error('Ошибка запуска конвейера:', err);
+                alert('Ошибка запуска конвейера: ' + err.message);
+                await loadPipelineStatus();
+            } finally {
+                pipelineRunButton.disabled = false;
+                pipelineRunDryButton.disabled = false;
+            }
+        }
+
+        pipelineRefreshButton.addEventListener('click', loadPipelineStatus);
+        pipelineRunButton.addEventListener('click', () => runPipeline(false));
+        pipelineRunDryButton.addEventListener('click', () => runPipeline(true));
+        loadPipelineStatus();
 
         // --- База знаний ---
         function currentProjectId() {

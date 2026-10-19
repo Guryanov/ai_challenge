@@ -26,6 +26,7 @@
 - Поле **Project ID** в боковой панели — область базы знаний и RAG; при смене проекта генерируется новая сессия.
 - **База знаний (chunking + эмбеддинги + SQLite)**: загрузка текстовых файлов и PDF (из PDF извлекается текстовый слой; сканы без текста не поддерживаются), две стратегии chunking (`fixed` — по размеру, `structure` — по заголовкам/разделам), генерация эмбеддингов через локальный Ollama, хранение чанков и метаданных (`file / name / section / chunk_id`) в SQLite, поиск top-K и сравнение стратегий по метрикам (`Recall@K`, `Precision@K`, `MRR`).
 - **RAG в чате**: при включённом переключателе **База знаний (RAG)** агент на каждый запрос ищет top-K релевантных чанков проекта и подаёт их в LLM отдельным системным сообщением с указанием источника (файл/раздел/`chunk_id`). Если фрагменты найдены, к ответу детерминированно добавляется блок источников с цитатами (и структурированное поле `sources`); если релевантность ниже порога — в режиме `chat` агент отвечает «Не знаю» и просит уточнение.
+- **Конвейер Sentry → Jira → фикс → PR**: по расписанию (раз в сутки) забирает новые критические issue (`level:fatal`) из Sentry через MCP, создаёт тикет в Jira, ветку `bugfix/JIRA-###` от `main`, исправляет код по RAG-поиску по проиндексированному репозиторию и открывает PR в `main`. См. раздел «Конвейер Sentry → Jira → фикс → PR».
 - Логирование входящих HTTP-запросов и вызовов внешнего API.
 
 ## Хранение настроек
@@ -205,11 +206,30 @@ servers:
       - "/Users/iguryanov"
     timeout: 30s
   github:
-    # GitHub MCP используется для режима вопросов о репозитории (/help, /branches, /diff).
+    # GitHub MCP используется для режима вопросов о репозитории (/help, /branches, /diff)
+    # и для конвейера (ветки, файлы, PR).
     type: http
     url: https://api.githubcopilot.com/mcp/
     headers:
       Authorization: Bearer <GITHUB_TOKEN>
+    timeout: 60s
+  sentry:
+    # Sentry MCP — критические issue для конвейера. Требуется Node/npx.
+    type: stdio
+    command: npx
+    args: ["-y", "@sentry/mcp-server@latest"]
+    env:
+      SENTRY_ACCESS_TOKEN: <SENTRY_TOKEN>
+    timeout: 60s
+  jira:
+    # Jira MCP (mcp-atlassian) — создание тикетов. Требуется uv/uvx.
+    type: stdio
+    command: uvx
+    args: ["mcp-atlassian"]
+    env:
+      JIRA_URL: https://<org>.atlassian.net
+      JIRA_USERNAME: <email>
+      JIRA_API_TOKEN: <JIRA_TOKEN>
     timeout: 60s
 ```
 
@@ -473,6 +493,64 @@ curl -s -X POST http://localhost:8080/api/chat \
   -d '{"message":"/diff","session_id":"s1"}'
 ```
 
+## Конвейер Sentry → Jira → фикс → PR
+
+Автоматический конвейер исправления критических падений. Раз в сутки (время `PIPELINE_AT`)
+или по ручному вызову он выполняет детерминированную последовательность шагов:
+
+1. Забирает из **Sentry** новые критические issue (`SENTRY_ISSUE_QUERY`, по умолчанию
+   `is:unresolved level:fatal`).
+2. На каждый новый issue генерирует текст задачи и создаёт тикет в **Jira**.
+3. От ветки `main` создаёт ветку `bugfix/JIRA-###` (номер — ключ созданного тикета).
+4. Ищет место падения в **базе знаний** (RAG по проиндексированному коду репозитория),
+   читает найденные файлы и просит LLM предложить правки, записывает их в ветку.
+5. Открывает **PR в `main`** с описанием. PR **никогда не мержится** автоматически.
+
+Шаги 1, 2, 3 и 5 — детерминированные вызовы MCP-инструментов; LLM используется
+только для текста тикета и для генерации правок.
+
+### Требования
+- MCP-серверы `sentry` и `jira` в `mcp.yaml` и сервер `github`; `API_FORMAT=openai`.
+- `npx` (Node) для `@sentry/mcp-server`, `uvx` (`uv`) для `mcp-atlassian`.
+- Токены: Sentry user auth token (чтение), Atlassian API token, GitHub token (repo).
+  Секреты задаются в `env` MCP-серверов в `mcp.yaml` (файл не коммитится).
+
+### Индексация кода для RAG
+При старте (если `REPO_INDEX_ON_START=true`) сервис обходит локальный чекаут
+(`REPO_ROOT`), заливает текстовые файлы разрешённых расширений
+(`REPO_INDEX_EXTENSIONS`) в базу знаний под `REPO_PROJECT_ID` и индексирует их.
+Повторная индексация идемпотентна: неизменённые чанки не пересчитываются.
+Для корректного контекста запускайте сервис из чекаута `main`.
+
+### Настройка (`.env`)
+| Переменная | Описание | По умолчанию |
+|---|---|---|
+| `PIPELINE_ENABLED` | включить фоновый конвейер | `false` |
+| `PIPELINE_AT` | время запуска `HH:MM` (локальное) | `09:00` |
+| `SENTRY_ISSUE_QUERY` | серверный запрос Sentry | `is:unresolved level:fatal` |
+| `SENTRY_ORGANIZATION` / `SENTRY_PROJECT` | уточнение поиска Sentry | — |
+| `REPO_OWNER` / `REPO_NAME` | целевой GitHub-репозиторий | — (обязательны) |
+| `REPO_BASE_BRANCH` | базовая ветка | `main` |
+| `REPO_ROOT` | локальный чекаут для индексации | `.` |
+| `REPO_PROJECT_ID` | `project_id` базы знаний с кодом | `repo` |
+| `REPO_INDEX_ON_START` | индексировать код при старте | `true` |
+| `REPO_INDEX_EXTENSIONS` | расширения через запятую | `.go,.md,.yaml,.yml,.json,.txt,.html,.css,.js,.sh,.sql` |
+| `REPO_INDEX_MAX_FILE_KB` | пропускать файлы больше | `256` |
+| `JIRA_PROJECT_KEY` | ключ проекта Jira | — (обязателен) |
+| `JIRA_ISSUE_TYPE` | тип задачи | `Task` |
+| `PIPELINE_MAX_ISSUES_PER_RUN` | лимит issue за запуск | `1` |
+| `PIPELINE_MAX_FILES_PER_FIX` | лимит файлов на фикс | `3` |
+
+### API и статус
+- `POST /api/pipeline/run` — ручной запуск. `POST /api/pipeline/run?dry_run=true` —
+  планирование без мутаций (тикет/ветка/PR не создаются).
+- `GET /api/pipeline/status` — настройки, последний запуск и список обработанных issue.
+- Панель **«Конвейер Sentry → Jira»** в боковой панели UI: запуск и статус.
+
+Обработанные issue сохраняются в `data/pipeline/state.json` (не коммитится), повторный
+запуск не создаёт дубликаты. При провале шага issue обрабатывается повторно, уже
+созданные Jira-тикет и ветка переиспользуются.
+
 ## LiteLLM-шлюз (виртуальные ключи и лимиты)
 
 Опционально приложение может ходить в модели не напрямую, а через LiteLLM-прокси —
@@ -533,6 +611,14 @@ ai_challenge (8080) --Bearer sk-<virtual-key>--> LiteLLM (4000) --ollama--> Olla
   - `prompts.go` — построение системного промпта и сообщений;
   - `extract.go` — разбор ответа внешнего API;
   - `types.go` — модели агента.
+- `internal/pipeline/` — конвейер Sentry → Jira → фикс → PR:
+  - `orchestrator.go` — детерминированные шаги и вызовы MCP;
+  - `mcp.go` — резолвинг инструментов и разбор ответов MCP;
+  - `prompts.go` — промпты тикета/фикса и тело PR;
+  - `store.go` — состояние обработанных issue (`data/pipeline/state.json`);
+  - `indexer.go` — автоиндексация кода репозитория в базу знаний;
+  - `scheduler.go` — запуск раз в сутки в `HH:MM`;
+  - `types.go` — модели и интерфейсы конвейера.
 - `internal/history/` — хранение истории диалогов:
   - `store.go` — интерфейс `Store` и файловая реализация `FileStore`.
 - `internal/mcp/` — MCP SDK клиент:
