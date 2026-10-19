@@ -1,129 +1,33 @@
 # Чат с внешним API
 
-Простое клиент-серверное приложение на Go с веб-интерфейсом на HTML/CSS/JavaScript.
+Приложение на Go: веб-интерфейс шлёт сообщение во внешний API и показывает ответ.
 
 ## Возможности
 
-- Веб-страница с текстовым полем для ввода сообщений.
-- Введённое сообщение отображается сверху, ответ от внешнего API — снизу.
-- Поддержка авторизации: `Authorization: Bearer`, `X-API-Key`, `Api-Key`.
-- Два формата внешнего API:
-  - **generic** — отправляет `{"message": "..."}`;
-  - **openai** — отправляет запрос в формате `/v1/chat/completions`.
-- Настройка промптов: `SYSTEM_PROMPT`, `ASSISTANT_PROMPT`, `USER_PROMPT_TEMPLATE`.
-
-## Хранение настроек
-
-Настройки разделены на два файла:
-
-- `.env.secrets` — чувствительные данные: `EXTERNAL_API_URL` и `API_KEY`. **Не коммитится**.
-- `.env` — общие настройки: промпты, формат API, тип авторизации, порт. **Коммитится**.
-
-При первом клонировании репозитория создайте `.env.secrets` из примера и заполните своим URL и ключом:
-
-```bash
-cp .env.secrets.example .env.secrets
-```
+- Авторизация: `Bearer`, `X-API-Key`, `Api-Key`, `none`.
+- Формат: `generic` (`{"message":"..."}`) или `openai` (`/v1/chat/completions`).
+- Промпты: `SYSTEM_PROMPT`, `ASSISTANT_PROMPT`, `USER_PROMPT_TEMPLATE`.
 
 ## Запуск
 
-### Через скрипт (рекомендуется)
-
 ```bash
+cp .env.secrets.example .env.secrets   # секреты, не коммитится
 ./run.sh
 ```
 
-Скрипт последовательно загружает `.env.secrets`, затем `.env`, и запускает сервер.
+Вручную: `set -a; source .env.secrets; source .env; set +a; go run main.go`
 
-### Вручную
+Интерфейс: http://localhost:8080
 
-```bash
-set -a
-source .env.secrets
-source .env
-set +a
-go run main.go
-```
+## Переменные
 
-### Скомпилированный бинарник
-
-```bash
-go build -o ai-chat .
-set -a
-source .env.secrets
-source .env
-set +a
-./ai-chat
-```
-
-После запуска откройте: http://localhost:8080
-
-## Настройка через переменные окружения
-
-### `.env.secrets`
-
-| Переменная         | Описание                              | По умолчанию |
-|--------------------|---------------------------------------|--------------|
-| `EXTERNAL_API_URL` | URL внешнего API                      | —            |
-| `API_KEY`          | Ключ авторизации                      | —            |
-
-### `.env`
-
-| Переменная            | Описание                                                                                             | По умолчанию                  |
-|-----------------------|------------------------------------------------------------------------------------------------------|-------------------------------|
-| `AUTH_TYPE`           | Тип авторизации: `bearer`, `x-api-key`, `api-key`, `none`                                            | `bearer`, если задан `API_KEY` |
-| `API_FORMAT`          | Формат API: `generic` или `openai`                                                                   | `openai`, если задан `API_KEY` |
-| `SYSTEM_PROMPT`       | Системный промпт, задающий поведение ассистента                                                      | —                             |
-| `ASSISTANT_PROMPT`    | Начальный текст ответа ассистента (prefix)                                                           | —                             |
-| `USER_PROMPT_TEMPLATE`| Шаблон для обёртки сообщения пользователя. Используйте `{message}` для подстановки                     | —                             |
-| `PORT`                | Порт HTTP-сервера                                                                                    | `8080`                        |
-
-## Примеры запуска без .env
-
-### OpenAI-совместимый API
-
-```bash
-EXTERNAL_API_URL=https://api.ai.localcorp.net/v1/chat/completions \
-API_KEY=sk-... \
-AUTH_TYPE=bearer \
-API_FORMAT=openai \
-go run main.go
-```
-
-### Системный промпт и шаблон пользователя
-
-```bash
-EXTERNAL_API_URL=https://api.ai.localcorp.net/v1/chat/completions \
-API_KEY=sk-... \
-API_FORMAT=openai \
-SYSTEM_PROMPT="Ты эксперт по Go. Отвечай кратко." \
-USER_PROMPT_TEMPLATE="Вопрос про Go: {message}\nКраткий ответ:" \
-go run main.go
-```
-
-### Простое внешнее API без авторизации
-
-```bash
-EXTERNAL_API_URL=https://httpbin.org/anything \
-AUTH_TYPE=none \
-API_FORMAT=generic \
-go run main.go
-```
-
-## Проверка
-
-```bash
-curl -s -X POST http://localhost:8080/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Привет"}'
-```
-
-## Структура
-
-- `main.go` — HTTP-сервер, авторизация, вызов и парсинг внешнего API.
-- `static/index.html` — веб-интерфейс чата.
-- `.env.secrets` — чувствительные данные (не коммитится).
-- `.env.secrets.example` — пример секретов (коммитится).
-- `.env` — общие настройки (коммитится).
-- `run.sh` — скрипт запуска с загрузкой обоих `.env`-файлов.
-- `.gitignore` — исключает `.env`, `.env.secrets` и бинарники из репозитория.
+| Переменная | Описание | По умолчанию |
+|---|---|---|
+| `EXTERNAL_API_URL` | URL внешнего API | `https://httpbin.org/anything` |
+| `API_KEY` | Ключ авторизации | — |
+| `AUTH_TYPE` | `bearer`, `x-api-key`, `api-key`, `none` | по `API_KEY` |
+| `API_FORMAT` | `generic` или `openai` | по `API_KEY` |
+| `SYSTEM_PROMPT` | Системный промпт | — |
+| `ASSISTANT_PROMPT` | Начало ответа ассистента | — |
+| `USER_PROMPT_TEMPLATE` | Шаблон, `{message}` | — |
+| `PORT` | Порт сервера | `8080` |
