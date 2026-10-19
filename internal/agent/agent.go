@@ -154,6 +154,29 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	}
 	workflowMode := effectiveWorkflowMode(session)
 
+	// Чат-команды обрабатываются до workflow/task-логики. Детерминированные
+	// команды возвращают готовый ответ и не пишутся в историю диалога; команды,
+	// требующие инструментов, задают синтезированный запрос к LLM (commandLLMMessage).
+	commandLLMMessage := ""
+	if req.TaskAction == "" {
+		if out, handled := handleCommand(&session, req.Message); handled {
+			if out.handled {
+				if a.history != nil && req.SessionID != "" {
+					if err := a.history.SaveSession(req.SessionID, session); err != nil {
+						return AgentResponse{}, err
+					}
+				}
+				out.response.ActiveBranch = session.ActiveBranch
+				out.response.Branches = branchNames(session.Branches)
+				out.response.Facts = session.Facts
+				out.response.ActiveGitHubProject = session.GitHubProject
+				out.response.ActiveGitBranch = session.GitBranch
+				return out.response, nil
+			}
+			commandLLMMessage = out.llmMessage
+		}
+	}
+
 	// Определяем состояние конечного автомата задачи.
 	originalUserMessage := req.Message
 	switch {
@@ -215,8 +238,31 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	}
 	invariantContext := formatInvariantsContext(invariants)
 
+	// Контекст режима вопросов о GitHub-проекте. Инструменты доступны только в
+	// режиме chat при OpenAI-совместимом формате; иначе честно предупреждаем.
+	githubContext := ""
+	if session.GitHubProject != "" {
+		if workflowMode == WorkflowModeChat && a.tools != nil && a.config.APIFormat == "openai" {
+			githubContext = formatGitHubProjectContext(session.GitHubProject)
+		} else {
+			githubContext = "Активный проект GitHub: " + session.GitHubProject + ".\n" +
+				"Инструменты GitHub MCP сейчас недоступны (нужны режим chat, подключённый сервер github и API_FORMAT=openai). " +
+				"Не выдумывай факты о проекте; если данных нет — прямо скажи об этом."
+		}
+		if session.GitBranch != "" {
+			githubContext += "\nАктивная git-ветка: " + session.GitBranch + "."
+		}
+	}
+
+	// Для команд, которые выполняются через LLM, запрос к модели — синтезированный
+	// промпт; в историю при этом сохраняется исходная команда пользователя.
+	effectiveUserMessage := originalUserMessage
+	if commandLLMMessage != "" {
+		effectiveUserMessage = commandLLMMessage
+	}
+
 	// Ищем релевантные фрагменты в базе знаний проекта (RAG), если включено.
-	knowledge := a.retrieveKnowledgeContext(req, originalUserMessage)
+	knowledge := a.retrieveKnowledgeContext(req, effectiveUserMessage)
 	knowledgeContext := knowledge.context
 
 	// В режиме chat при отсутствии релевантных фрагментов (ниже порога или
@@ -237,6 +283,8 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 		refusal.TaskStage = session.TaskStage
 		refusal.TaskStatus = session.TaskStatus
 		refusal.TaskContext = session.TaskContext
+		refusal.ActiveGitHubProject = session.GitHubProject
+		refusal.ActiveGitBranch = session.GitBranch
 		return refusal, nil
 	}
 
@@ -251,7 +299,7 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	if workflowMode == WorkflowModeWorkflow {
 		llmReq.Message = buildTaskStagePrompt(session, projectContext, userProfileContext, invariants)
 	} else {
-		llmReq.Message = originalUserMessage
+		llmReq.Message = effectiveUserMessage
 	}
 
 	workflowContext := ""
@@ -264,12 +312,12 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 
 	usedTools := workflowMode == WorkflowModeChat && a.tools != nil && a.config.APIFormat == "openai"
 	if usedTools {
-		llmResp, err = a.runWithTools(&session, llmReq, messages, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext)
+		llmResp, err = a.runWithTools(&session, llmReq, originalUserMessage, messages, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext)
 		if err != nil {
 			return AgentResponse{}, err
 		}
 	} else {
-		onceResp, err := a.runOnce(llmReq, messages, nil, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext)
+		onceResp, err := a.runOnce(llmReq, messages, nil, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext)
 		if err != nil {
 			return AgentResponse{}, err
 		}
@@ -307,6 +355,8 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	llmResp.TaskStage = session.TaskStage
 	llmResp.TaskStatus = session.TaskStatus
 	llmResp.TaskContext = session.TaskContext
+	llmResp.ActiveGitHubProject = session.GitHubProject
+	llmResp.ActiveGitBranch = session.GitBranch
 
 	return llmResp, nil
 }
@@ -411,8 +461,8 @@ func (a *SimpleAgent) ragMode() string {
 }
 
 // runOnce выполняет один вызов LLM и возвращает полный ответ, включая tool_calls.
-func (a *SimpleAgent) runOnce(req AgentRequest, history []history.Message, tools ToolRegistry, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext string) (LLMResponse, error) {
-	payload, err := buildPayload(a.config, req, history, tools, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext)
+func (a *SimpleAgent) runOnce(req AgentRequest, history []history.Message, tools ToolRegistry, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext string) (LLMResponse, error) {
+	payload, err := buildPayload(a.config, req, history, tools, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext)
 	if err != nil {
 		return LLMResponse{}, err
 	}
@@ -427,18 +477,23 @@ func (a *SimpleAgent) runOnce(req AgentRequest, history []history.Message, tools
 
 // runWithTools выполняет ReAct-цикл вызова инструментов в режиме chat.
 // Сообщения с tool_calls и результаты сохраняются в историю сессии.
-func (a *SimpleAgent) runWithTools(session *history.Session, req AgentRequest, baseMessages []history.Message, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext string) (AgentResponse, error) {
+// userMessage — текст, сохраняемый в историю как реплика пользователя (для
+// команд это исходная команда, тогда как req.Message может быть синтезированным
+// промптом, который отправляется модели, но не показывается в истории).
+func (a *SimpleAgent) runWithTools(session *history.Session, req AgentRequest, userMessage string, baseMessages []history.Message, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext string) (AgentResponse, error) {
 	const maxIterations = 10
 
 	branch := session.Branches[session.ActiveBranch]
 
-	userMessage := history.Message{Role: "user", Content: req.Message}
-	branch.Messages = append(branch.Messages, userMessage)
-	turnMessages := []history.Message{userMessage}
+	if userMessage == "" {
+		userMessage = req.Message
+	}
+	branch.Messages = append(branch.Messages, history.Message{Role: "user", Content: userMessage})
+	turnMessages := []history.Message{{Role: "user", Content: req.Message}}
 
 	for i := 0; i < maxIterations; i++ {
 		conversation := append(baseMessages, turnMessages...)
-		llmResp, err := a.runOnce(req, conversation, a.tools, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext)
+		llmResp, err := a.runOnce(req, conversation, a.tools, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext)
 		if err != nil {
 			return AgentResponse{}, err
 		}

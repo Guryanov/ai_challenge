@@ -129,6 +129,54 @@
             gap: 12px;
             align-items: center;
         }
+        #composer {
+            position: relative;
+        }
+        .project-mode {
+            padding: 8px 12px;
+            background-color: #e7f1ff;
+            color: #0b5ed7;
+            border: 1px solid #b6d4fe;
+            border-radius: 8px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        .project-mode strong {
+            font-weight: 600;
+        }
+        .command-hint {
+            position: absolute;
+            bottom: 100%;
+            left: 24px;
+            right: 24px;
+            margin-bottom: 6px;
+            background-color: #fff;
+            border: 1px solid #d0d7de;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            z-index: 20;
+        }
+        .command-hint-item {
+            padding: 8px 14px;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            gap: 10px;
+            align-items: baseline;
+        }
+        .command-hint-item:hover,
+        .command-hint-item.active {
+            background-color: #f0f6ff;
+        }
+        .command-hint-item code {
+            font-weight: 600;
+            color: #0b5ed7;
+        }
+        .command-hint-item span {
+            color: #6c757d;
+            font-size: 12px;
+        }
         #message-input {
             flex: 1;
             padding: 12px 16px;
@@ -1061,10 +1109,14 @@
             <div id="daily-digest" class="daily-digest hidden"></div>
             <div class="empty-state">Введите сообщение, чтобы начать диалог</div>
         </div>
-        <form id="input-area">
-            <input type="text" id="message-input" placeholder="Введите сообщение..." autocomplete="off" autofocus>
-            <button type="submit" id="send-button">Отправить</button>
-        </form>
+        <div id="composer">
+            <div id="command-hint" class="command-hint hidden"></div>
+            <form id="input-area">
+                <div id="project-mode" class="project-mode hidden"></div>
+                <input type="text" id="message-input" placeholder="Введите сообщение или /help owner/repo..." autocomplete="off" autofocus>
+                <button type="submit" id="send-button">Отправить</button>
+            </form>
+        </div>
     </div>
 
     <div id="memory-dialog" class="dialog hidden">
@@ -1226,6 +1278,8 @@
         const form = document.getElementById('input-area');
         const input = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
+        const projectMode = document.getElementById('project-mode');
+        const commandHint = document.getElementById('command-hint');
         const role = document.getElementById('role');
         const responseFormat = document.getElementById('response-format');
         const temperature = document.getElementById('temperature');
@@ -1482,8 +1536,79 @@
             workflowMode.value = savedWorkflowMode;
         }
 
+        // --- Чат-команды: индикатор активного GitHub-проекта и подсказка «/» ---
+
+        const commandCatalog = [
+            { command: '/help', args: '<owner/repo>', description: 'режим вопросов о GitHub-проекте' },
+            { command: '/branches', args: '', description: 'список веток проекта' },
+            { command: '/branch', args: '<name>', description: 'выбрать активную ветку' },
+            { command: '/diff', args: '[pr]', description: 'получить и проанализировать diff PR' },
+            { command: '/exit', args: '', description: 'выйти из режима проекта' },
+        ];
+
+        function renderProjectMode(repo, branch) {
+            if (repo) {
+                let text = 'GitHub: <strong>' + escapeHtml(repo) + '</strong>';
+                if (branch) {
+                    text += ' · <strong>' + escapeHtml(branch) + '</strong>';
+                }
+                projectMode.innerHTML = text;
+                projectMode.classList.remove('hidden');
+            } else {
+                projectMode.innerHTML = '';
+                projectMode.classList.add('hidden');
+            }
+        }
+
+        function restoreProjectMode() {
+            renderProjectMode(
+                localStorage.getItem('github_project') || '',
+                localStorage.getItem('git_branch') || ''
+            );
+        }
+
+        function hideCommandHint() {
+            commandHint.classList.add('hidden');
+            commandHint.innerHTML = '';
+        }
+
+        function renderCommandHint() {
+            const value = input.value;
+            if (!value.startsWith('/') || value.includes(' ') || value.includes('\n')) {
+                hideCommandHint();
+                return;
+            }
+
+            const filtered = commandCatalog.filter((item) => item.command.startsWith(value.toLowerCase()));
+            if (filtered.length === 0) {
+                hideCommandHint();
+                return;
+            }
+
+            commandHint.innerHTML = '';
+            filtered.forEach((item) => {
+                const row = document.createElement('div');
+                row.className = 'command-hint-item';
+                const label = item.command + (item.args ? ' ' + item.args : '');
+                row.innerHTML = '<code>' + escapeHtml(label) + '</code><span>' + escapeHtml(item.description) + '</span>';
+                row.addEventListener('mousedown', (event) => {
+                    event.preventDefault();
+                    input.value = item.command + ' ';
+                    hideCommandHint();
+                    input.focus();
+                });
+                commandHint.appendChild(row);
+            });
+            commandHint.classList.remove('hidden');
+        }
+
+        input.addEventListener('input', renderCommandHint);
+        input.addEventListener('blur', () => setTimeout(hideCommandHint, 100));
+        restoreProjectMode();
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            hideCommandHint();
             if (taskState.status === 'pending') {
                 alert('Текущий этап ожидает утверждения. Используйте кнопки под ответом ассистента.');
                 return;
@@ -1836,6 +1961,24 @@
                     context: data.task_context || {}
                 };
                 renderTaskPanel();
+            }
+            if (data.active_github_project !== undefined) {
+                const repo = data.active_github_project || '';
+                if (repo) {
+                    localStorage.setItem('github_project', repo);
+                } else {
+                    localStorage.removeItem('github_project');
+                }
+                renderProjectMode(repo, localStorage.getItem('git_branch') || '');
+            }
+            if (data.active_git_branch !== undefined) {
+                const branch = data.active_git_branch || '';
+                if (branch) {
+                    localStorage.setItem('git_branch', branch);
+                } else {
+                    localStorage.removeItem('git_branch');
+                }
+                renderProjectMode(localStorage.getItem('github_project') || '', branch);
             }
         }
 

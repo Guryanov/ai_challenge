@@ -79,6 +79,10 @@ type AgentResponse struct {
 	Duration           time.Duration
 	Sources            []SourceRef
 	RAGUsed            bool
+	// ActiveGitHubProject — активный GitHub-проект (owner/repo) в режиме вопросов о проекте.
+	ActiveGitHubProject string
+	// ActiveGitBranch — активная git-ветка GitHub-проекта.
+	ActiveGitBranch string
 }
 
 // RetrievedChunk — фрагмент, найденный в базе знаний проекта.

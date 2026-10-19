@@ -61,6 +61,10 @@ type Session struct {
 	TaskStage    string            `json:"task_stage,omitempty"`
 	TaskStatus   string            `json:"task_status,omitempty"`
 	TaskContext  TaskContext       `json:"task_context,omitempty"`
+	// GitHubProject — активный GitHub-проект (owner/repo) для режима вопросов о проекте.
+	GitHubProject string `json:"github_project,omitempty"`
+	// GitBranch — активная git-ветка GitHub-проекта (для /branches, /branch, /diff).
+	GitBranch string `json:"git_branch,omitempty"`
 }
 
 // Store описывает хранилище истории сообщений.

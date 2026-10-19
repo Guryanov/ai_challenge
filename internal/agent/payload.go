@@ -35,7 +35,7 @@ type toolFunctionDef struct {
 	Parameters  map[string]any `json:"parameters,omitempty"`
 }
 
-func buildPayload(cfg Config, req AgentRequest, history []history.Message, tools ToolRegistry, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext string) ([]byte, error) {
+func buildPayload(cfg Config, req AgentRequest, history []history.Message, tools ToolRegistry, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext string) ([]byte, error) {
 	switch cfg.APIFormat {
 	case "openai":
 		var rf *responseFormat
@@ -45,7 +45,7 @@ func buildPayload(cfg Config, req AgentRequest, history []history.Message, tools
 
 		payload := openaiPayload{
 			Model:          cfg.Model,
-			Messages:       buildMessages(cfg, req, history, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext),
+			Messages:       buildMessages(cfg, req, history, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext),
 			ResponseFormat: rf,
 			Temperature:    req.Temperature,
 			MaxTokens:      req.MaxTokens,
@@ -72,6 +72,9 @@ func buildPayload(cfg Config, req AgentRequest, history []history.Message, tools
 		}
 		if invariantContext != "" {
 			userContent = invariantContext + "\n\n" + userContent
+		}
+		if githubContext != "" {
+			userContent = githubContext + "\n\n" + userContent
 		}
 		if projectContext != "" {
 			userContent = projectContext + "\n\n" + userContent

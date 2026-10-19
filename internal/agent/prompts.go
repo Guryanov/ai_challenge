@@ -116,7 +116,16 @@ func toSourceRefs(chunks []RetrievedChunk) []SourceRef {
 	return sources
 }
 
-func buildMessages(cfg Config, req AgentRequest, history []history.Message, userProfileContext, projectContext, invariantContext, workflowContext, knowledgeContext string) []map[string]any {
+// formatGitHubProjectContext формирует системное сообщение для режима
+// вопросов о GitHub-проекте: требует опираться на инструменты github MCP.
+func formatGitHubProjectContext(repo string) string {
+	return "Активный проект GitHub: " + repo + ".\n" +
+		"Отвечай на вопросы о нём, используя инструменты github MCP (get_file_contents, search_code, list_issues и т.п.). " +
+		"В аргументах инструментов передавай owner и repo из «" + repo + "». " +
+		"Не выдумывай факты о проекте; если данных нет — прямо скажи об этом."
+}
+
+func buildMessages(cfg Config, req AgentRequest, history []history.Message, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext string) []map[string]any {
 	var messages []map[string]any
 
 	systemContent := buildSystemPrompt(cfg, req.Role)
@@ -130,6 +139,10 @@ func buildMessages(cfg Config, req AgentRequest, history []history.Message, user
 
 	if invariantContext != "" {
 		messages = append(messages, map[string]any{"role": "system", "content": invariantContext})
+	}
+
+	if githubContext != "" {
+		messages = append(messages, map[string]any{"role": "system", "content": githubContext})
 	}
 
 	if projectContext != "" {
