@@ -34,13 +34,22 @@ type config struct {
 }
 
 type chatRequest struct {
-	Message string `json:"message"`
+	Message        string `json:"message"`
+	ResponseFormat string `json:"response_format"`
+	MaxTokens      *int   `json:"max_tokens"`
+	StopSequence   string `json:"stop_sequence"`
 }
 
 type chatResponse struct {
-	User     string `json:"user"`
-	Response string `json:"response"`
-	Error    string `json:"error,omitempty"`
+	User         string `json:"user"`
+	Response     string `json:"response"`
+	FinishReason string `json:"finish_reason,omitempty"`
+	Error        string `json:"error,omitempty"`
+}
+
+type extractionResult struct {
+	Content      string
+	FinishReason string
 }
 
 func loadConfig() config {
@@ -99,9 +108,28 @@ func main() {
 	if cfg.APIFormat == "openai" {
 		logPrompts(cfg)
 	}
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, loggingMiddleware(mux)); err != nil {
 		log.Fatalf("Ошибка запуска сервера: %v", err)
 	}
+}
+
+type responseRecorder struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rr *responseRecorder) WriteHeader(code int) {
+	rr.statusCode = code
+	rr.ResponseWriter.WriteHeader(code)
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rec := &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(rec, r)
+		log.Printf("%s %s -> %d (%s)", r.Method, r.URL.Path, rec.statusCode, time.Since(start))
+	})
 }
 
 func logPrompts(cfg config) {
@@ -144,7 +172,7 @@ func handleChat(cfg config) http.HandlerFunc {
 			return
 		}
 
-		payload, err := buildPayload(cfg, req.Message)
+		payload, err := buildPayload(cfg, req)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "Ошибка формирования запроса")
 			return
@@ -160,8 +188,18 @@ func handleChat(cfg config) http.HandlerFunc {
 		externalReq.Header.Set("Accept", "application/json")
 		setAuthHeader(externalReq, cfg)
 
+		log.Printf("Запрос к внешнему API: %s, message=%q, response_format=%s, max_tokens=%v, stop=%q",
+			cfg.ExternalAPI,
+			truncate(req.Message, 80),
+			req.ResponseFormat,
+			formatMaxTokens(req.MaxTokens),
+			req.StopSequence,
+		)
+
+		apiStart := time.Now()
 		externalResp, err := client.Do(externalReq)
 		if err != nil {
+			log.Printf("Ошибка вызова внешнего API: %v", err)
 			writeError(w, http.StatusBadGateway, fmt.Sprintf("Ошибка вызова внешнего API: %v", err))
 			return
 		}
@@ -174,15 +212,23 @@ func handleChat(cfg config) http.HandlerFunc {
 		}
 
 		if externalResp.StatusCode < 200 || externalResp.StatusCode >= 300 {
+			log.Printf("Внешний API вернул статус %d: %s", externalResp.StatusCode, truncate(string(respBody), 200))
 			writeError(w, http.StatusBadGateway, fmt.Sprintf("Внешний API вернул статус %d: %s", externalResp.StatusCode, string(respBody)))
 			return
 		}
 
-		responseText := extractResponse(cfg.APIFormat, respBody)
+		result := extractResponse(cfg.APIFormat, req.ResponseFormat, respBody)
+		log.Printf("Ответ внешнего API: status=%d, duration=%s, finish_reason=%q, content_length=%d",
+			externalResp.StatusCode,
+			time.Since(apiStart),
+			result.FinishReason,
+			len(result.Content),
+		)
 
 		resp := chatResponse{
-			User:     req.Message,
-			Response: responseText,
+			User:         req.Message,
+			Response:     result.Content,
+			FinishReason: result.FinishReason,
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -192,22 +238,51 @@ func handleChat(cfg config) http.HandlerFunc {
 	}
 }
 
-type openaiPayload struct {
-	Model    string              `json:"model"`
-	Messages []map[string]string `json:"messages"`
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
-func buildPayload(cfg config, message string) ([]byte, error) {
+func formatMaxTokens(v *int) string {
+	if v == nil {
+		return "not set"
+	}
+	return fmt.Sprintf("%d", *v)
+}
+
+type openaiPayload struct {
+	Model          string              `json:"model"`
+	Messages       []map[string]string `json:"messages"`
+	ResponseFormat *responseFormat     `json:"response_format,omitempty"`
+	MaxTokens      *int                `json:"max_tokens,omitempty"`
+	Stop           string              `json:"stop,omitempty"`
+}
+
+type responseFormat struct {
+	Type string `json:"type"`
+}
+
+func buildPayload(cfg config, req chatRequest) ([]byte, error) {
 	switch cfg.APIFormat {
 	case "openai":
+		var rf *responseFormat
+		if req.ResponseFormat == "json" {
+			rf = &responseFormat{Type: "json_object"}
+		}
+
 		return json.Marshal(openaiPayload{
-			Model:    defaultModel,
-			Messages: buildMessages(cfg, message),
+			Model:          defaultModel,
+			Messages:       buildMessages(cfg, req.Message),
+			ResponseFormat: rf,
+			MaxTokens:      req.MaxTokens,
+			Stop:           req.StopSequence,
 		})
 	default:
-		userContent := message
+		userContent := req.Message
 		if cfg.UserPromptTemplate != "" {
-			userContent = strings.ReplaceAll(cfg.UserPromptTemplate, "{message}", message)
+			userContent = strings.ReplaceAll(cfg.UserPromptTemplate, "{message}", req.Message)
 		}
 		if cfg.SystemPrompt != "" {
 			userContent = cfg.SystemPrompt + "\n\n" + userContent
@@ -254,19 +329,20 @@ func setAuthHeader(req *http.Request, cfg config) {
 	}
 }
 
-func extractResponse(apiFormat string, body []byte) string {
+func extractResponse(apiFormat, responseFormat string, body []byte) extractionResult {
 	if apiFormat == "openai" {
-		return extractOpenAIResponse(body)
+		return extractOpenAIResponse(responseFormat, body)
 	}
-	return extractGenericResponse(body)
+	return extractionResult{Content: extractGenericResponse(body)}
 }
 
-func extractOpenAIResponse(body []byte) string {
+func extractOpenAIResponse(responseFormat string, body []byte) extractionResult {
 	var data struct {
 		Choices []struct {
 			Message struct {
 				Content string `json:"content"`
 			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
 		Error *struct {
 			Message string `json:"message"`
@@ -274,18 +350,37 @@ func extractOpenAIResponse(body []byte) string {
 	}
 
 	if err := json.Unmarshal(body, &data); err != nil {
-		return string(body)
+		return extractionResult{Content: string(body)}
 	}
 
 	if data.Error != nil {
-		return "Ошибка API: " + data.Error.Message
+		return extractionResult{Content: "Ошибка API: " + data.Error.Message}
 	}
 
 	if len(data.Choices) > 0 {
-		return data.Choices[0].Message.Content
+		content := data.Choices[0].Message.Content
+		if responseFormat == "json" {
+			content = prettyPrintJSON(content)
+		}
+		return extractionResult{
+			Content:      content,
+			FinishReason: data.Choices[0].FinishReason,
+		}
 	}
 
-	return string(body)
+	return extractionResult{Content: string(body)}
+}
+
+func prettyPrintJSON(s string) string {
+	var v interface{}
+	if err := json.Unmarshal([]byte(s), &v); err != nil {
+		return s
+	}
+	formatted, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return s
+	}
+	return string(formatted)
 }
 
 func extractGenericResponse(body []byte) string {
