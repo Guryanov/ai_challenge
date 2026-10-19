@@ -177,6 +177,39 @@
             color: #6c757d;
             font-size: 12px;
         }
+        .attach-button {
+            padding: 10px 16px;
+            background-color: #f1f3f5;
+            color: #343a40;
+            border: 1px solid #ced4da;
+            border-radius: 24px;
+            font-size: 14px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .attach-button:hover {
+            background-color: #e2e6ea;
+        }
+        .ticket-chip {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 4px 8px;
+            padding: 8px 12px;
+            background-color: #e7f1ff;
+            color: #0b5ed7;
+            border: 1px solid #b6d4fe;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        .ticket-chip .ticket-chip-remove {
+            margin-left: auto;
+            border: none;
+            background: transparent;
+            color: #0b5ed7;
+            cursor: pointer;
+            font-size: 14px;
+        }
         #message-input {
             flex: 1;
             padding: 12px 16px;
@@ -1111,8 +1144,11 @@
         </div>
         <div id="composer">
             <div id="command-hint" class="command-hint hidden"></div>
+            <div id="ticket-chip" class="ticket-chip hidden"></div>
             <form id="input-area">
                 <div id="project-mode" class="project-mode hidden"></div>
+                <button type="button" id="ticket-attach-button" class="attach-button" title="Прикрепить тикет (JSON)">Тикет</button>
+                <input type="file" id="ticket-file-input" accept=".json,application/json" hidden>
                 <input type="text" id="message-input" placeholder="Введите сообщение или /help owner/repo..." autocomplete="off" autofocus>
                 <button type="submit" id="send-button">Отправить</button>
             </form>
@@ -1280,6 +1316,10 @@
         const sendButton = document.getElementById('send-button');
         const projectMode = document.getElementById('project-mode');
         const commandHint = document.getElementById('command-hint');
+        const ticketChip = document.getElementById('ticket-chip');
+        const ticketAttachButton = document.getElementById('ticket-attach-button');
+        const ticketFileInput = document.getElementById('ticket-file-input');
+        let attachedTicket = null;
         const role = document.getElementById('role');
         const responseFormat = document.getElementById('response-format');
         const temperature = document.getElementById('temperature');
@@ -1606,6 +1646,66 @@
         input.addEventListener('blur', () => setTimeout(hideCommandHint, 100));
         restoreProjectMode();
 
+        function renderTicketChip() {
+            if (!attachedTicket) {
+                ticketChip.classList.add('hidden');
+                ticketChip.innerHTML = '';
+                return;
+            }
+            const parts = [];
+            if (attachedTicket.ticket_id) parts.push('Тикет #' + attachedTicket.ticket_id);
+            if (attachedTicket.project) parts.push(attachedTicket.project);
+            if (attachedTicket.user_name) parts.push(attachedTicket.user_name);
+            ticketChip.innerHTML = '<span>' + escapeHtml(parts.join(' · ')) + '</span>' +
+                '<button type="button" class="ticket-chip-remove" title="Убрать тикет">✕</button>';
+            ticketChip.querySelector('.ticket-chip-remove').addEventListener('click', clearAttachedTicket);
+            ticketChip.classList.remove('hidden');
+        }
+
+        function clearAttachedTicket() {
+            attachedTicket = null;
+            ticketFileInput.value = '';
+            renderTicketChip();
+        }
+
+        function handleTicketFile(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                let data;
+                try {
+                    data = JSON.parse(reader.result);
+                } catch (err) {
+                    alert('Не удалось прочитать JSON тикета: ' + err.message);
+                    return;
+                }
+                const userName = (data.user_name || '').toString().trim();
+                const question = (data.question || '').toString().trim();
+                if (!userName || !question) {
+                    alert('В тикете обязательны поля user_name и question');
+                    return;
+                }
+                attachedTicket = {
+                    ticket_id: (data.ticket_id || '').toString(),
+                    user_name: userName,
+                    user_email: (data.user_email || '').toString(),
+                    project: (data.project || '').toString(),
+                    question: question,
+                    created_at: (data.created_at || '').toString()
+                };
+                renderTicketChip();
+            };
+            reader.onerror = () => alert('Ошибка чтения файла тикета');
+            reader.readAsText(file);
+        }
+
+        ticketAttachButton.addEventListener('click', () => ticketFileInput.click());
+        ticketFileInput.addEventListener('change', () => {
+            if (ticketFileInput.files && ticketFileInput.files[0]) {
+                handleTicketFile(ticketFileInput.files[0]);
+            }
+        });
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             hideCommandHint();
@@ -1614,7 +1714,13 @@
                 return;
             }
             const message = input.value.trim();
-            if (!message) return;
+            if (!message && !attachedTicket) return;
+
+            const ticket = attachedTicket;
+            const displayText = ticket
+                ? ((ticket.ticket_id ? 'Тикет #' + ticket.ticket_id + ' · ' : 'Тикет · ') +
+                    (ticket.project ? ticket.project + '\n' : '\n') + ticket.question)
+                : message;
 
             input.value = '';
             setLoading(true);
@@ -1622,7 +1728,7 @@
             const exchange = document.createElement('div');
             exchange.className = 'exchange';
 
-            const userMessage = createMessage(message, 'user-message');
+            const userMessage = createMessage(displayText, 'user-message');
             exchange.appendChild(userMessage);
             chat.appendChild(exchange);
 
@@ -1630,11 +1736,11 @@
             scrollToBottom();
 
             const payload = {
-                message: message,
+                message: message || (ticket ? ticket.question : ''),
                 role: role.value || null,
                 response_format: responseFormat.value,
                 session_id: sessionId,
-                project_id: projectIdInput.value.trim(),
+                project_id: (ticket && ticket.project) ? ticket.project : projectIdInput.value.trim(),
                 profile_id: profileSelect.value,
                 context_strategy: contextStrategy.value,
                 facts: facts,
@@ -1646,7 +1752,8 @@
                 rag_strategy: ragStrategy.value,
                 rag_top_k: parseInt(ragTopK.value, 10) || 0,
                 rag_candidates: parseInt(ragCandidates.value, 10) || 0,
-                rag_threshold: parseNumberOrNull(ragThreshold.value)
+                rag_threshold: parseNumberOrNull(ragThreshold.value),
+                ticket: ticket
             };
 
             try {
@@ -1678,6 +1785,7 @@
                 exchange.appendChild(errorMessage);
             } finally {
                 setLoading(false);
+                clearAttachedTicket();
                 scrollToBottom();
             }
         });

@@ -108,6 +108,7 @@ func loadConfig() serverConfig {
 			RAGEnabled:               parseBoolEnv("RAG_ENABLED", true),
 			RAGStrategy:              getEnvOrDefault("RAG_STRATEGY", defaultRAGStrategy),
 			RAGTopK:                  parseIntEnv("RAG_TOP_K", defaultSearchTopK),
+			GitLabMCPServer:          strings.TrimSpace(os.Getenv("GITLAB_MCP_SERVER")),
 		},
 	}
 

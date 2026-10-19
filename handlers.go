@@ -111,9 +111,16 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 		}
 		defer r.Body.Close()
 
-		if req.Message == "" {
+		if req.Message == "" && req.Ticket == nil {
 			writeError(w, http.StatusBadRequest, "Сообщение не может быть пустым")
 			return
+		}
+
+		if req.Ticket != nil {
+			if strings.TrimSpace(req.Ticket.UserName) == "" || strings.TrimSpace(req.Ticket.Question) == "" {
+				writeError(w, http.StatusBadRequest, "в тикете обязательны поля user_name и question")
+				return
+			}
 		}
 
 		result, err := a.Run(agent.AgentRequest{
@@ -136,6 +143,7 @@ func handleChat(a agent.Agent) http.HandlerFunc {
 			RAGTopK:         req.RAGTopK,
 			RAGCandidates:   req.RAGCandidates,
 			RAGThreshold:    req.RAGThreshold,
+			Ticket:          req.Ticket,
 		})
 		if err != nil {
 			log.Printf("Ошибка агента: %v", err)

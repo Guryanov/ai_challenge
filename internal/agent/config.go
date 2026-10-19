@@ -27,4 +27,6 @@ type Config struct {
 	RAGCandidates            int
 	RAGThreshold             float64
 	RAGMode                  string
+	// GitLabMCPServer — явное имя GitLab MCP-сервера; пусто — авто-определение.
+	GitLabMCPServer string
 }

@@ -33,3 +33,13 @@ servers:
   #   # headers:
   #   #   Authorization: Bearer your-token
   #   timeout: 30s
+
+  # gitlab:
+  #   # GitLab MCP используется для ответов на тикеты (см. README, раздел «Тикеты»).
+  #   # Имя сервера должно содержать "gitlab" — агент находит его автоматически;
+  #   # при другом имени задайте GITLAB_MCP_SERVER=<имя>.
+  #   type: http
+  #   url: https://gitlab.example.com/api/v4/mcp
+  #   headers:
+  #     Authorization: Bearer <GITLAB_TOKEN>
+  #   timeout: 60s

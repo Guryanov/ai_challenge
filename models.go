@@ -27,6 +27,7 @@ type chatRequest struct {
 	RAGTopK         int               `json:"rag_top_k"`
 	RAGCandidates   int               `json:"rag_candidates"`
 	RAGThreshold    *float64          `json:"rag_threshold"`
+	Ticket          *agent.Ticket     `json:"ticket"`
 }
 
 // chatResponse — HTTP-ответ фронтенду.

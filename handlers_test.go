@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"ai-chat/internal/agent"
 	"ai-chat/internal/knowledge"
 	"ai-chat/internal/mcp"
 )
@@ -192,5 +193,56 @@ servers:
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// stubAgent фиксирует запрос и возвращает заранее заданный ответ.
+type stubAgent struct {
+	called  bool
+	lastReq agent.AgentRequest
+	resp    agent.AgentResponse
+	err     error
+}
+
+func (s *stubAgent) Run(req agent.AgentRequest) (agent.AgentResponse, error) {
+	s.called = true
+	s.lastReq = req
+	return s.resp, s.err
+}
+
+func (s *stubAgent) Manage(_ agent.AgentRequest) (agent.AgentResponse, error) {
+	return agent.AgentResponse{}, nil
+}
+
+func (s *stubAgent) ClearHistory(_ string) error { return nil }
+
+func TestHandleChatTicketValidation(t *testing.T) {
+	stub := &stubAgent{}
+	handler := handleChat(stub)
+
+	rec := postJSON(t, handler, "/api/chat",
+		`{"message":"","ticket":{"user_name":"","question":"Вопрос"}}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for ticket without user_name, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if stub.called {
+		t.Fatal("agent must not be called for invalid ticket")
+	}
+}
+
+func TestHandleChatPassesTicket(t *testing.T) {
+	stub := &stubAgent{resp: agent.AgentResponse{Content: "Добрый день уважаемый Иван."}}
+	handler := handleChat(stub)
+
+	rec := postJSON(t, handler, "/api/chat",
+		`{"message":"","ticket":{"user_name":"Иван","project":"group/repo","question":"Почему падает X?"}}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if stub.lastReq.Ticket == nil {
+		t.Fatal("ticket was not passed to the agent")
+	}
+	if stub.lastReq.Ticket.Project != "group/repo" {
+		t.Fatalf("ticket project = %q, want group/repo", stub.lastReq.Ticket.Project)
 	}
 }

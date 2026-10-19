@@ -154,11 +154,42 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	}
 	workflowMode := effectiveWorkflowMode(session)
 
+	// Обработка тикета: вопрос берётся из тикета, проект — для RAG/памяти и GitLab MCP.
+	ticketContext := ""
+	if req.Ticket != nil {
+		t := req.Ticket
+		if strings.TrimSpace(t.UserName) == "" || strings.TrimSpace(t.Question) == "" {
+			return AgentResponse{}, fmt.Errorf("в тикете обязательны поля user_name и question")
+		}
+		if workflowMode == WorkflowModeWorkflow {
+			resp := AgentResponse{Content: ticketWorkflowNotice}
+			if a.history != nil && req.SessionID != "" {
+				if err := a.history.SaveSession(req.SessionID, session); err != nil {
+					return AgentResponse{}, err
+				}
+			}
+			resp.ActiveBranch = session.ActiveBranch
+			resp.Branches = branchNames(session.Branches)
+			resp.Facts = session.Facts
+			resp.ProjectID = req.ProjectID
+			resp.ProfileID = req.ProfileID
+			resp.ActiveGitHubProject = session.GitHubProject
+			resp.ActiveGitBranch = session.GitBranch
+			return resp, nil
+		}
+		if p := strings.TrimSpace(t.Project); p != "" {
+			req.ProjectID = p
+		}
+		req.Message = t.Question
+		serverName, serverConnected := a.gitlabServer()
+		ticketContext = formatTicketContext(*t, serverName, serverConnected)
+	}
+
 	// Чат-команды обрабатываются до workflow/task-логики. Детерминированные
 	// команды возвращают готовый ответ и не пишутся в историю диалога; команды,
 	// требующие инструментов, задают синтезированный запрос к LLM (commandLLMMessage).
 	commandLLMMessage := ""
-	if req.TaskAction == "" {
+	if req.TaskAction == "" && req.Ticket == nil {
 		if out, handled := handleCommand(&session, req.Message); handled {
 			if out.handled {
 				if a.history != nil && req.SessionID != "" {
@@ -268,7 +299,7 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 	// В режиме chat при отсутствии релевантных фрагментов (ниже порога или
 	// ничего не найдено) ассистент обязан сказать «не знаю» и попросить
 	// уточнение — детерминированно, без вызова LLM.
-	if workflowMode == WorkflowModeChat && knowledge.applied && len(knowledge.chunks) == 0 && a.ragMode() != "none" {
+	if workflowMode == WorkflowModeChat && req.Ticket == nil && knowledge.applied && len(knowledge.chunks) == 0 && a.ragMode() != "none" {
 		refusal := AgentResponse{Content: ragRefusalMessage}
 		sessionTotal, err := a.saveHistory(req.SessionID, &session, originalUserMessage, refusal)
 		if err != nil {
@@ -312,12 +343,12 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 
 	usedTools := workflowMode == WorkflowModeChat && a.tools != nil && a.config.APIFormat == "openai"
 	if usedTools {
-		llmResp, err = a.runWithTools(&session, llmReq, originalUserMessage, messages, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext)
+		llmResp, err = a.runWithTools(&session, llmReq, originalUserMessage, messages, userProfileContext, projectContext, invariantContext, githubContext, ticketContext, workflowContext, knowledgeContext)
 		if err != nil {
 			return AgentResponse{}, err
 		}
 	} else {
-		onceResp, err := a.runOnce(llmReq, messages, nil, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext)
+		onceResp, err := a.runOnce(llmReq, messages, nil, userProfileContext, projectContext, invariantContext, githubContext, ticketContext, workflowContext, knowledgeContext)
 		if err != nil {
 			return AgentResponse{}, err
 		}
@@ -346,6 +377,11 @@ func (a *SimpleAgent) Run(req AgentRequest) (AgentResponse, error) {
 		return AgentResponse{}, err
 	}
 	llmResp.SessionTotalTokens = sessionTotal
+
+	// Детерминированное приветствие для ответа на тикет.
+	if req.Ticket != nil {
+		llmResp.Content = ticketGreeting(req.Ticket.UserName) + stripLeadingGreeting(llmResp.Content)
+	}
 
 	llmResp.ActiveBranch = session.ActiveBranch
 	llmResp.Branches = branchNames(session.Branches)
@@ -413,6 +449,10 @@ const knowledgeEmptyNote = "В базе знаний проекта не най�
 const ragRefusalMessage = "Не знаю. В базе знаний не нашлось достаточно релевантной информации по этому вопросу. " +
 	"Уточните, пожалуйста, вопрос или добавьте нужные документы."
 
+// ticketWorkflowNotice — уведомление, что тикеты обрабатываются только в режиме chat.
+const ticketWorkflowNotice = "Обработка тикетов доступна только в режиме chat. " +
+	"Переключите режим обработки на chat и прикрепите тикет снова."
+
 func (a *SimpleAgent) ragEnabled(req AgentRequest) bool {
 	if req.RAGEnabled != nil {
 		return *req.RAGEnabled
@@ -460,9 +500,27 @@ func (a *SimpleAgent) ragMode() string {
 	return strings.TrimSpace(a.config.RAGMode)
 }
 
+// gitlabServer возвращает имя GitLab MCP-сервера и признак подключения.
+// Явное имя из конфигурации имеет приоритет над авто-определением.
+func (a *SimpleAgent) gitlabServer() (string, bool) {
+	resolver, ok := a.tools.(GitLabServerResolver)
+	if name := strings.TrimSpace(a.config.GitLabMCPServer); name != "" {
+		if ok {
+			if discovered, connected := resolver.ResolveGitLabServer(); discovered == name {
+				return name, connected
+			}
+		}
+		return name, false
+	}
+	if ok {
+		return resolver.ResolveGitLabServer()
+	}
+	return "", false
+}
+
 // runOnce выполняет один вызов LLM и возвращает полный ответ, включая tool_calls.
-func (a *SimpleAgent) runOnce(req AgentRequest, history []history.Message, tools ToolRegistry, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext string) (LLMResponse, error) {
-	payload, err := buildPayload(a.config, req, history, tools, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext)
+func (a *SimpleAgent) runOnce(req AgentRequest, history []history.Message, tools ToolRegistry, userProfileContext, projectContext, invariantContext, githubContext, ticketContext, workflowContext, knowledgeContext string) (LLMResponse, error) {
+	payload, err := buildPayload(a.config, req, history, tools, userProfileContext, projectContext, invariantContext, githubContext, ticketContext, workflowContext, knowledgeContext)
 	if err != nil {
 		return LLMResponse{}, err
 	}
@@ -480,7 +538,7 @@ func (a *SimpleAgent) runOnce(req AgentRequest, history []history.Message, tools
 // userMessage — текст, сохраняемый в историю как реплика пользователя (для
 // команд это исходная команда, тогда как req.Message может быть синтезированным
 // промптом, который отправляется модели, но не показывается в истории).
-func (a *SimpleAgent) runWithTools(session *history.Session, req AgentRequest, userMessage string, baseMessages []history.Message, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext string) (AgentResponse, error) {
+func (a *SimpleAgent) runWithTools(session *history.Session, req AgentRequest, userMessage string, baseMessages []history.Message, userProfileContext, projectContext, invariantContext, githubContext, ticketContext, workflowContext, knowledgeContext string) (AgentResponse, error) {
 	const maxIterations = 10
 
 	branch := session.Branches[session.ActiveBranch]
@@ -493,7 +551,7 @@ func (a *SimpleAgent) runWithTools(session *history.Session, req AgentRequest, u
 
 	for i := 0; i < maxIterations; i++ {
 		conversation := append(baseMessages, turnMessages...)
-		llmResp, err := a.runOnce(req, conversation, a.tools, userProfileContext, projectContext, invariantContext, githubContext, workflowContext, knowledgeContext)
+		llmResp, err := a.runOnce(req, conversation, a.tools, userProfileContext, projectContext, invariantContext, githubContext, ticketContext, workflowContext, knowledgeContext)
 		if err != nil {
 			return AgentResponse{}, err
 		}
